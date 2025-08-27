@@ -1,0 +1,80 @@
+<!-- app/templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+	<script>
+		if (localStorage.theme === 'dark') {
+			document.documentElement.classList.add('dark');
+		}
+	</script>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = {
+			darkMode: 'class'
+		}
+	</script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Barcade Dashboard</title>
+	<script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
+	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center">
+		<h1 class="text-xl font-semibold">Barcade Management</h1>
+		<div class="flex items-center gap-4">
+		{% if user %}
+			<span class="font-semibold">{{ user.name }}</span>
+			<span class="bg-white text-blue-800 text-xs px-2 py-1 rounded uppercase ml-2">
+				{% if user.role.value == "admin" %}ADMIN{% else %}{{ user.role.value|upper }}{% endif %}
+			</span>
+			<a href="/logout" class="underline hover:text-gray-300 ml-4">Logout</a>
+			{% if user.role.value == "admin" %}
+				<button
+					hx-get="/settings/modal"
+					hx-target="#modal-container"
+					hx-swap="innerHTML"
+					class="bg-white text-blue-800 text-xs px-2 py-1 rounded ml-2 font-semibold hover:bg-gray-200">
+					Settings
+				</button>
+			{% endif %}
+		{% else %}
+			<form method="post" action="/login" class="flex items-center gap-2">
+				<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
+					class="px-2 py-1 rounded text-black" required>
+				<button type="submit" class="bg-white text-blue-800 px-3 py-1 rounded font-semibold">Login</button>
+			</form>
+		{% endif %}
+
+			<!-- Always show dark mode toggle -->
+			<button onclick="toggleDarkMode()" class="text-white hover:text-gray-300 text-xl ml-4">
+				<i class="fa-solid fa-moon block dark:hidden"></i>
+				<i class="fa-solid fa-sun hidden dark:block"></i>
+			</button>
+		</div>
+
+	</header>
+
+	<main class="p-6">
+		{% block content %}{% endblock %}
+	</main>
+
+	<script>
+		function toggleDarkMode() {
+			const html = document.documentElement;
+			const isDark = html.classList.contains('dark');
+
+			if (isDark) {
+				html.classList.remove('dark');
+				localStorage.theme = 'light';
+			} else {
+				html.classList.add('dark');
+				localStorage.theme = 'dark';
+			}
+		}
+	</script>
+
+
+</body>
+</html>

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
+
+<form method="post" action="/select-location" class="mb-4">
+	<label for="location_id" class="mr-2 font-medium">Location:</label>
+	<select name="location_id" id="location_id" onchange="this.form.submit()"
+		class="px-2 py-1 rounded bg-white text-black dark:bg-gray-800 dark:text-white border border-gray-300 dark:border-gray-600">
+		{% for loc in locations %}
+			<option value="{{ loc.id }}" {% if loc.id == selected_location.id %}selected{% endif %}>
+				{{ loc.name }}
+			</option>
+		{% endfor %}
+	</select>
+</form>
+
+{% if selected_location %}
+<div class="relative inline-block border rounded bg-white dark:bg-gray-800 overflow-hidden"
+     style="width: {{ selected_location.columns * selected_location.cell_size }}px; 
+            height: {{ selected_location.rows * selected_location.cell_size }}px;">
+
+	{# Draw the grid #}
+	{% for y in range(selected_location.rows) %}
+		{% for x in range(selected_location.columns) %}
+			<div class="absolute border border-gray-200"
+			     style="left: {{ x * selected_location.cell_size }}px; 
+			            top: {{ y * selected_location.cell_size }}px; 
+			            width: {{ selected_location.cell_size }}px; 
+			            height: {{ selected_location.cell_size }}px;">
+			</div>
+		{% endfor %}
+	{% endfor %}
+
+	{# Place the games #}
+	{% for game in games %}
+		<div class="absolute text-center"
+		     style="left: {{ game.x * selected_location.cell_size }}px; 
+		            top: {{ game.y * selected_location.cell_size }}px; 
+		            width: {{ selected_location.cell_size }}px; 
+		            height: {{ selected_location.cell_size }}px;">
+			<div class="h-full flex flex-col justify-center items-center cursor-pointer"
+			     hx-get="/game/{{ game.id }}/modal"
+			     hx-target="#modal-container"
+			     hx-trigger="click"
+			     hx-swap="innerHTML">
+				<img src="{{ game.icon or game.category.icon or '/static/images/default.png' }}"
+				     class="w-10 h-10 mb-1"
+				     alt="{{ game.name }}">
+				<span class="text-xs font-semibold block text-center px-2 py-0.5 rounded-full
+							bg-white/80 dark:bg-gray-800/80 text-black dark:text-white shadow-sm">
+					{{ game.name }}
+				</span>
+
+				<span class="text-xs font-medium block text-center px-2 py-0.5 rounded-full shadow-sm
+							{{ status_classes(game.status) }}">
+					{{ game.status.value.replace('_', ' ') | title }}
+				</span>
+
+			</div>
+		</div>
+	{% endfor %}
+
+</div>
+{% endif %}
+
+<!-- ✅ Modal container must be inside the block! -->
+<div id="modal-container"></div>
+
+{% endblock %}

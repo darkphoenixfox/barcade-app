@@ -1,0 +1,94 @@
+<!-- app/templates/game_modal.html -->
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+	<div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-md w-full p-6 relative space-y-6">
+		<!-- Close Button -->
+		<button class="absolute top-2 right-3 text-gray-500 hover:text-black text-xl"
+		        onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
+
+		<!-- 🎮 Game Info -->
+		<div>
+			<h2 class="text-xl font-bold mb-1">{{ game.name }}</h2>
+			<p class="text-sm text-gray-600 dark:text-gray-300 mb-1">
+				Category: {{ game.category.name }}
+			</p>
+			<p class="text-sm text-gray-700 dark:text-gray-200 mb-1">
+				Status:
+				<span class="{{ status_classes(game.status) }} font-semibold">
+					{{ game.status.value.replace('_', ' ') | title }}
+				</span>
+			</p>
+			<div class="text-sm text-gray-700 dark:text-gray-300">
+				POC: {{ game.poc_name }}<br>
+				{{ game.poc_email }}<br>
+				{{ game.poc_phone }}
+			</div>
+		<!-- ⚠️ Status Actions -->
+		<div>
+			<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase mb-2 mt-6">Update Status</h3>
+			<div class="flex flex-col gap-2">
+				<form method="post" action="/game/{{ game.id }}/report-fault">
+					<input type="hidden" name="user_id" value="{{ user.id }}">
+					<input type="hidden" name="status" value="needs_maintenance">
+					<button class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded w-full">
+						Needs Maintenance
+					</button>
+				</form>
+
+				<form method="post" action="/game/{{ game.id }}/report-fault">
+					<input type="hidden" name="user_id" value="{{ user.id }}">
+					<input type="hidden" name="status" value="out_of_order">
+					<button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded w-full">
+						Is Broken
+					</button>
+				</form>
+
+				<form method="post" action="/game/{{ game.id }}/report-fix">
+					<input type="hidden" name="user_id" value="{{ user.id }}">
+					<button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
+						Is Working
+					</button>
+				</form>
+				<!-- View Status History -->
+				{% if request.session.logged_in %}
+					<button
+						hx-get="/game/{{ game.id }}/status-history"
+						hx-target="#modal-container"
+						hx-swap="innerHTML"
+						class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded w-full mt-2">
+						View Status History
+					</button>
+				{% endif %}
+
+			</div>
+		</div>
+
+		<!-- 💰 Revenue Logging -->
+		<div>
+			<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase mb-2 mt-6">Log Revenue</h3>
+			<form method="post" action="/game/{{ game.id }}/log-revenue" class="space-y-2">
+				<input type="hidden" name="user_id" value="{{ user.id }}">
+				<input type="number" step="0.01" name="amount" placeholder="Amount" required
+				       class="w-full border px-2 py-1 rounded">
+				<select name="is_token" class="w-full border px-2 py-1 rounded">
+					<option value="0">Cash</option>
+					<option value="1">Tokens</option>
+				</select>
+				<input name="period" type="text" placeholder="Period (e.g. Fri–Sun)"
+				       class="w-full border px-2 py-1 rounded">
+				<button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">
+					Log Revenue
+				</button>
+							<!-- View Revenue History -->
+				{% if request.session.is_manager %}
+					<button
+						hx-get="/game/{{ game.id }}/revenue-history"
+						hx-target="#modal-container"
+						hx-swap="innerHTML"
+						class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded w-full mt-2">
+						View Revenue History
+					</button>
+				{% endif %}
+			</form>
+		</div>
+	</div>
+</div>
