@@ -1,5 +1,5 @@
-<!-- app/templates/status_history_modal.html -->
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+     onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
 	<div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-md w-full p-6 relative space-y-6">
 		<button class="absolute top-2 right-3 text-gray-500 hover:text-white text-xl"
 		        onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
@@ -11,14 +11,16 @@
 			{% for entry in entries %}
 				<div class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white/60 dark:bg-gray-800/60">
 					<span class="text-xs font-semibold px-2 py-0.5 rounded-full mr-2
-						{% if entry.action == 'fault' %}
-							bg-yellow-100 dark:bg-yellow-900 text-yellow-800
-						{% elif entry.action == 'fix' %}
-							bg-green-100 dark:bg-green-900 text-green-800
+						{% if entry.action == 'out_of_order' %}
+							bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200
+						{% elif entry.action == 'needs_maintenance' %}
+							bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200
+						{% elif entry.action == 'working' %}
+							bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200
 						{% else %}
-							bg-gray-300 dark:bg-gray-700 text-gray-800
+							bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200
 						{% endif %}">
-						{{ entry.action | title }}
+						{{ entry.action.replace('_', ' ') | title }}
 					</span>
 					<span class="text-xs text-gray-700 dark:text-gray-300">
 						by {{ entry.user.name }} &bull; {{ entry.timestamp.strftime("%Y-%m-%d %H:%M") }}

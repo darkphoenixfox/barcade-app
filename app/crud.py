@@ -64,7 +64,7 @@ def create_game(db: Session, name: str, category_id: int, location_id: Optional[
         poc_name=poc_name,
         poc_email=poc_email,
         poc_phone=poc_phone,
-        icon=icon, # Add the icon filename
+        icon=icon,
         status=GameStatus.working
     )
     db.add(db_game)
@@ -78,7 +78,7 @@ def update_game_status(db: Session, game: models.Game, status: GameStatus, user_
 	log = LogEntry(
 		game_id=game.id,
 		user_id=user_id,
-		action="status_change",
+		action=status.value,
 		comments=comment
 	)
 	db.add(log)
@@ -90,7 +90,7 @@ def report_fault(db: Session, game: models.Game, user_id: int, comment: str, sta
 	log = LogEntry(
 		game_id=game.id,
 		user_id=user_id,
-		action="fault",
+		action=status.value,
 		comments=comment
 	)
 	game.status = status
@@ -103,7 +103,7 @@ def report_fix(db: Session, game: models.Game, user_id: int, comment: str = ""):
 	log = LogEntry(
 		game_id=game.id,
 		user_id=user_id,
-		action="fix",
+		action="working",
 		comments=comment
 	)
 	game.status = GameStatus.working
@@ -125,3 +125,13 @@ def log_revenue(db: Session, game: models.Game, user_id: int, amount: float, is_
 	db.add(entry)
 	db.commit()
 	return entry
+
+# --- NEW: History Deletion ---
+
+def clear_all_log_entries(db: Session):
+    db.query(LogEntry).delete()
+    db.commit()
+
+def clear_all_revenue_entries(db: Session):
+    db.query(RevenueEntry).delete()
+    db.commit()

@@ -54,4 +54,4 @@ coverage.xml
 Thumbs.db
 
 # Ignore images in the static folder
-static/images/*
+app/static/images/*

@@ -27,28 +27,27 @@
 		<div>
 			<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase mb-2">Update Status</h3>
 			<div class="flex flex-col gap-2">
-				<form method="post" action="/game/{{ game.id }}/report-fault">
-					<input type="hidden" name="user_id" value="{{ user.id }}">
-					<input type="hidden" name="status" value="needs_maintenance">
-					<button class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded w-full">
-						Needs Maintenance
-					</button>
-				</form>
+				<button
+					hx-get="/game/{{ game.id }}/status-change-prompt?status=needs_maintenance"
+					hx-target="#modal-container" hx-swap="innerHTML"
+					class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded w-full">
+					Needs Maintenance
+				</button>
 
-				<form method="post" action="/game/{{ game.id }}/report-fault">
-					<input type="hidden" name="user_id" value="{{ user.id }}">
-					<input type="hidden" name="status" value="out_of_order">
-					<button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded w-full">
-						Is Broken
-					</button>
-				</form>
+				<button
+					hx-get="/game/{{ game.id }}/status-change-prompt?status=out_of_order"
+					hx-target="#modal-container" hx-swap="innerHTML"
+					class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded w-full">
+					Is Broken
+				</button>
 
-				<form method="post" action="/game/{{ game.id }}/report-fix">
-					<input type="hidden" name="user_id" value="{{ user.id }}">
-					<button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
-						Is Working
-					</button>
-				</form>
+				<button
+					hx-get="/game/{{ game.id }}/status-change-prompt?status=working"
+					hx-target="#modal-container" hx-swap="innerHTML"
+					class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
+					Is Working
+				</button>
+
 				{% if request.session.logged_in %}
 					<button
 						hx-get="/game/{{ game.id }}/status-history"

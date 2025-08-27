@@ -1,0 +1,36 @@
+<div id="settings-content" class="fade-in space-y-6">
+  <div>
+    <h3 class="text-lg font-semibold text-red-600 dark:text-red-400">Danger zone</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400">These actions are destructive and cannot be undone.</p>
+  </div>
+
+  <div class="p-4 border border-red-500/50 rounded-lg space-y-4">
+    <div class="flex justify-between items-center">
+      <div>
+        <h4 class="font-semibold">Clear all status history</h4>
+        <p class="text-sm text-gray-500">Permanently delete all fault, fix, and status entries for every game.</p>
+      </div>
+      <button
+        hx-post="/settings/clear-status-history"
+        hx-confirm="DANGER: This will permanently delete all status history for every game. This action cannot be undone. Are you sure?"
+        hx-target="#settings-content"
+        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">
+        Clear status history
+      </button>
+    </div>
+
+    <div class="flex justify-between items-center">
+      <div>
+        <h4 class="font-semibold">Clear all revenue history</h4>
+        <p class="text-sm text-gray-500">Permanently delete all revenue entries for every game.</p>
+      </div>
+      <button
+        hx-post="/settings/clear-revenue-history"
+        hx-confirm="DANGER: This will permanently delete all revenue history for every game. This action cannot be undone. Are you sure?"
+        hx-target="#settings-content"
+        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded whitespace-nowrap">
+        Clear revenue history
+      </button>
+    </div>
+  </div>
+</div>

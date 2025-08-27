@@ -132,45 +132,75 @@ def game_modal(game_id: int, request: Request, db: Session = Depends(get_db)):
 		"game": game
 	})
 
+@app.get("/game/{game_id}/status-change-prompt", response_class=HTMLResponse)
+def status_change_prompt(game_id: int, status: str, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        # Handle not logged in case
+        return HTMLResponse("Unauthorized", status_code=401)
+        
+    game = crud.get_game_by_id(db, game_id)
+    
+    # Determine which URL the confirmation form should submit to
+    if status == 'working':
+        submit_url = f"/game/{game.id}/report-fix"
+    else:
+        submit_url = f"/game/{game.id}/report-fault"
+    
+    status_title = status.replace('_', ' ').title()
+
+    return templates.TemplateResponse("status_change_note_modal.html", {
+        "request": request,
+        "game": game,
+        "status": status,
+        "status_title": status_title,
+        "submit_url": submit_url
+    })
+
+
 @app.post("/game/{game_id}/report-fault")
 def report_fault(
 	request: Request,
 	game_id: int,
 	status: str = Form(...),
+	note: Optional[str] = Form(""),
 	db: Session = Depends(get_db)
 ):
 	game = crud.get_game_by_id(db, game_id)
 	user = get_current_user(request, db)
 
 	if game and user:
+		# Use the provided note, or create a default if it's empty
+		comment = note or f"{status.replace('_', ' ').title()} reported"
 		crud.report_fault(
 			db,
 			game=game,
 			user_id=user.id,
-			comment=f"{status.replace('_', ' ').title()} reported via modal",
+			comment=comment,
 			status=models.GameStatus(status)
 		)
 
 	return RedirectResponse(url="/", status_code=303)
 
 
-
-
 @app.post("/game/{game_id}/report-fix")
 def report_fix(
 	request: Request,
 	game_id: int,
+	note: Optional[str] = Form(""),
 	db: Session = Depends(get_db)
 ):
 	game = crud.get_game_by_id(db, game_id)
 	user = get_current_user(request, db)
 
 	if game and user:
+		# Use the provided note, or create a default if it's empty
+		comment = note or "Marked as working"
 		crud.report_fix(
 			db,
 			game=game,
 			user_id=user.id,
-			comment="Marked as working via modal"
+			comment=comment
 		)
 
 	return RedirectResponse(url="/", status_code=303)
@@ -314,6 +344,42 @@ def settings_locations(request: Request, db: Session = Depends(get_db)):
 		"user": user,
 		"locations": locations
 	})
+
+@app.get("/settings/admin", response_class=HTMLResponse)
+def settings_admin_tab(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+    return templates.TemplateResponse("settings_admin.html", {"request": request})
+
+
+@app.post("/settings/clear-status-history", response_class=HTMLResponse)
+def clear_status_history(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    crud.clear_all_log_entries(db)
+
+    response = templates.TemplateResponse("settings_admin.html", {"request": request})
+    response.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": "All status history has been cleared."}
+    })
+    return response
+
+@app.post("/settings/clear-revenue-history", response_class=HTMLResponse)
+def clear_revenue_history(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    crud.clear_all_revenue_entries(db)
+
+    response = templates.TemplateResponse("settings_admin.html", {"request": request})
+    response.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": "All revenue history has been cleared."}
+    })
+    return response
 
 
 @app.get("/settings/location/add", response_class=HTMLResponse)
