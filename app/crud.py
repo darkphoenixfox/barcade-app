@@ -1,7 +1,7 @@
 # app/crud.py
 from sqlalchemy.orm import Session
 from . import models
-from .models import GameStatus, LogEntry, RevenueEntry, Location, Game
+from .models import GameStatus, LogEntry, RevenueEntry, Location, Game, User, UserRole
 from typing import Optional
 
 # ----------- USERS -----------
@@ -11,6 +11,30 @@ def get_user_by_pin(db: Session, pin: str):
 
 def get_users(db: Session):
 	return db.query(models.User).all()
+
+def get_user_by_id(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+# --- NEW ---
+def create_user(db: Session, name: str, pin: str, role: UserRole):
+    db_user = User(name=name, pin=pin, role=role)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def update_user(db: Session, user: User, name: str, pin: Optional[str], role: UserRole):
+    user.name = name
+    user.role = role
+    if pin:
+        user.pin = pin
+    db.commit()
+    db.refresh(user)
+    return user
+
+def delete_user(db: Session, user_to_delete: User):
+    db.delete(user_to_delete)
+    db.commit()
 
 # ----------- LOCATIONS -----------
 
@@ -126,7 +150,7 @@ def log_revenue(db: Session, game: models.Game, user_id: int, amount: float, is_
 	db.commit()
 	return entry
 
-# --- NEW: History Deletion ---
+# --- History Deletion ---
 
 def clear_all_log_entries(db: Session):
     db.query(LogEntry).delete()

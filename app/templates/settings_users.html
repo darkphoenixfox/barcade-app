@@ -1,7 +1,11 @@
 <div id="settings-content" class="fade-in">
   <div class="flex justify-between items-center mb-4">
     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Manage users</h3>
-    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+    <button
+      hx-get="/settings/user/add"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
       <i class="fa-solid fa-plus mr-2"></i>
       <span>Add user</span>
     </button>
@@ -29,9 +33,22 @@
             </span>
           </td>
           <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-            <button class="font-medium text-blue-600 dark:text-blue-500 hover:underline">
+            <button
+              hx-get="/settings/user/{{ u.id }}/edit"
+              hx-target="#modal-container"
+              hx-swap="innerHTML"
+              class="font-medium text-blue-600 dark:text-blue-500 hover:underline">
               Edit
             </button>
+            {% if u.id != user.id %}
+            <button
+              hx-delete="/settings/user/{{ u.id }}/delete"
+              hx-confirm="Are you sure you want to delete the user '{{ u.name }}'?"
+              hx-target="#settings-content"
+              class="font-medium text-red-600 dark:text-red-500 hover:underline">
+              Delete
+            </button>
+            {% endif %}
           </td>
         </tr>
         {% else %}

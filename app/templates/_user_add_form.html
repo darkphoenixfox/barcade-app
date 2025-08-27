@@ -1,0 +1,48 @@
+{% if error %}
+<div class="p-3 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
+  <span class="font-medium">Error:</span> {{ error }}
+</div>
+{% endif %}
+
+<form
+  hx-post="/settings/user/add"
+  hx-target="#add-user-form-wrapper"
+  hx-swap="innerHTML" 
+  class="space-y-4"
+  novalidate>
+
+  <div>
+    <label for="name" class="block text-sm font-medium">Name</label>
+    <input type="text" name="name" id="name" required value="{{ name or '' }}"
+           class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+  </div>
+  
+  <div>
+    <label for="pin" class="block text-sm font-medium">4-digit PIN</label>
+    <input type="password" name="pin" id="pin" required maxlength="4"
+           class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+  </div>
+
+  <div>
+      <label for="role" class="block text-sm font-medium">Role</label>
+      <select name="role" id="role" required
+              class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+        {% for r in roles %}
+          <option value="{{ r.value }}" {% if role == r.value %}selected{% endif %}>{{ r.name | title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  
+  <div class="flex justify-end gap-4 pt-4">
+    <button type="button"
+            hx-get="/settings/modal"
+            hx-target="#modal-container"
+            class="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-black dark:text-white font-bold py-2 px-4 rounded">
+      Cancel
+    </button>
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+      Create user
+    </button>
+  </div>
+</form>

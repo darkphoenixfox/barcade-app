@@ -115,7 +115,19 @@
 			const postReloadData = {
 				action: 'openSettings',
 				toastMessage: message,
-				tab: 'games' // Tell the script to open the 'games' tab
+				tab: 'games'
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+		// --- NEW: Event listener for saving a user ---
+		document.addEventListener('user_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message,
+				tab: 'users'
 			};
 			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
 			window.location.reload();

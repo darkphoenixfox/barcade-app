@@ -7,7 +7,6 @@ import enum
 
 class UserRole(str, enum.Enum):
 	admin = "admin"
-	staff = "staff"
 	user = "user"
 
 class GameStatus(str, enum.Enum):

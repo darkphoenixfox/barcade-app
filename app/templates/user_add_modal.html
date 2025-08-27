@@ -1,0 +1,12 @@
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+     onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
+  <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+
+    <h2 class="text-xl font-bold mb-4">Add new user</h2>
+    
+    <div id="add-user-form-wrapper">
+      {% include '_user_add_form.html' %}
+    </div>
+
+  </div>
+</div>

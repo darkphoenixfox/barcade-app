@@ -1,0 +1,50 @@
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+     onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
+  <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+
+    <h2 class="text-xl font-bold mb-4">Edit user: {{ user_to_edit.name }}</h2>
+
+    <form
+      hx-post="/settings/user/{{ user_to_edit.id }}/edit"
+      class="space-y-4"
+      novalidate>
+
+      <div>
+        <label for="name" class="block text-sm font-medium">Name</label>
+        <input type="text" name="name" id="name" value="{{ user_to_edit.name }}" required
+               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+      </div>
+      
+      <div>
+        <label for="pin" class="block text-sm font-medium">New PIN (optional)</label>
+        <input type="password" name="pin" id="pin" placeholder="Leave blank to keep current PIN" maxlength="4"
+               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+      </div>
+
+      <div>
+          <label for="role" class="block text-sm font-medium">Role</label>
+          <select name="role" id="role" required
+                  class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+            {% for role in roles %}
+              <option value="{{ role.value }}" {% if user_to_edit.role.value == role.value %}selected{% endif %}>
+                {{ role.name | title }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      
+      <div class="flex justify-end gap-4 pt-4">
+        <button type="button"
+                hx-get="/settings/modal"
+                hx-target="#modal-container"
+                class="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-black dark:text-white font-bold py-2 px-4 rounded">
+          Cancel
+        </button>
+        <button type="submit"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+          Save changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

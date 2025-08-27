@@ -518,6 +518,127 @@ def settings_games(request: Request, db: Session = Depends(get_db)):
 		"games": games
 	})
 
+@app.get("/settings/users", response_class=HTMLResponse)
+def settings_users(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    users = crud.get_users(db)
+
+    # MODIFIED: Add "user": user to the context dictionary
+    return templates.TemplateResponse("settings_users.html", {
+        "request": request,
+        "users": users,
+        "user": user
+    })
+
+@app.get("/settings/user/add", response_class=HTMLResponse)
+def add_user_form(request: Request, db: Session = Depends(get_db)):
+    current_user = get_current_user(request, db)
+    if not current_user or current_user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    return templates.TemplateResponse("user_add_modal.html", {
+        "request": request,
+        "roles": models.UserRole
+    })
+
+@app.post("/settings/user/add", response_class=HTMLResponse)
+def save_new_user(
+    request: Request,
+    name: str = Form(...),
+    pin: str = Form(...),
+    role: models.UserRole = Form(...),
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user or current_user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    existing_user = crud.get_user_by_pin(db, pin)
+    if existing_user:
+        # MODIFIED: Render the form fragment, not the whole modal
+        # We also pass the submitted values back to re-populate the form
+        return templates.TemplateResponse("_user_add_form.html", {
+            "request": request,
+            "roles": models.UserRole,
+            "name": name,
+            "role": role.value,
+            "error": f"PIN '{pin}' is already taken by user '{existing_user.name}'."
+        }, status_code=422)
+
+    new_user = crud.create_user(db, name=name, pin=pin, role=role)
+
+    trigger_data = {
+		"user_saved": {"message": f"User '{new_user.name}' has been created."}
+	}
+    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
+
+@app.delete("/settings/user/{user_id}/delete", response_class=HTMLResponse)
+def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = get_current_user(request, db)
+    if not current_user or current_user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    # Safety check: prevent an admin from deleting their own account
+    if current_user.id == user_id:
+        return HTMLResponse("<p>You cannot delete your own account.</p>", status_code=400)
+
+    user_to_delete = crud.get_user_by_id(db, user_id)
+    if not user_to_delete:
+        return HTMLResponse("<p>User not found.</p>", status_code=404)
+
+    user_name = user_to_delete.name
+    crud.delete_user(db, user_to_delete)
+
+    # After deleting, reload the user list and show a toast
+    response = settings_users(request, db=db)
+    response.headers["HX-Trigger"] = json.dumps({
+		"settings_saved": {"message": f"User '{user_name}' has been deleted."}
+	})
+    return response
+
+@app.get("/settings/user/{user_id}/edit", response_class=HTMLResponse)
+def edit_user_form(user_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = get_current_user(request, db)
+    if not current_user or current_user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+    
+    user_to_edit = crud.get_user_by_id(db, user_id)
+    if not user_to_edit:
+        return HTMLResponse("<p>User not found</p>", status_code=404)
+
+    return templates.TemplateResponse("user_edit_modal.html", {
+        "request": request,
+        "user_to_edit": user_to_edit,
+        "roles": models.UserRole # Pass the enum to the template
+    })
+
+@app.post("/settings/user/{user_id}/edit", response_class=HTMLResponse)
+def save_user_changes(
+    user_id: int,
+    request: Request,
+    name: str = Form(...),
+    pin: Optional[str] = Form(None),
+    role: models.UserRole = Form(...),
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(request, db)
+    if not current_user or current_user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    user_to_edit = crud.get_user_by_id(db, user_id)
+    if not user_to_edit:
+        return HTMLResponse("<p>User not found</p>", status_code=404)
+
+    updated_user = crud.update_user(db, user=user_to_edit, name=name, pin=pin, role=role)
+
+    trigger_data = {
+		"user_saved": {"message": f"User '{updated_user.name}' has been updated."}
+	}
+    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
+
 @app.get("/settings/games/add", response_class=HTMLResponse)
 def add_game_form(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
