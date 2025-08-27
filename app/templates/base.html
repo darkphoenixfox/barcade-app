@@ -1,4 +1,3 @@
-<!-- app/templates/base.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,8 +20,16 @@
 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
-	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center">
+	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center relative">
 		<h1 class="text-xl font-semibold">Barcade Management</h1>
+
+        <div id="location-selector-container"
+             class="absolute left-1/2 -translate-x-1/2"
+             hx-get="/location-selector"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+             </div>
+
 		<div class="flex items-center gap-4">
 		{% if user %}
 			<span class="font-semibold">{{ user.name }}</span>
@@ -47,7 +54,6 @@
 				</form>
 			{% endif %}
 
-			<!-- Always show dark mode toggle -->
 			<button onclick="toggleDarkMode()" class="text-white hover:text-gray-300 text-xl ml-4">
 				<i class="fa-solid fa-moon block dark:hidden"></i>
 				<i class="fa-solid fa-sun hidden dark:block"></i>
@@ -60,10 +66,8 @@
 		{% block content %}{% endblock %}
 	</main>
 
-	<!-- Toast container -->
 	<div id="toast" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
-	
-	<!-- Modal container -->
+
 	<div id="modal-container"></div>
 
 	<script>
@@ -94,16 +98,73 @@
 			}, 2000);
 		}
 
-		// HTMX custom event handlers (fired via HX-Trigger header)
+		// Event listener for saving a location
+		document.addEventListener('location_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+		// Event listener for saving a game
+		document.addEventListener('game_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message,
+				tab: 'games' // Tell the script to open the 'games' tab
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+
+		// HTMX custom event handler for simple saves (no reload)
 		document.addEventListener('settings_saved', function (e) {
 			const msg = (e && e.detail && e.detail.message) ? e.detail.message : "Settings saved";
 			showToast(msg);
 		});
 
-		document.addEventListener('refresh_grid', function () {
-			// Full page reload to redraw grid with new rows/columns/cell size
-			window.location.reload();
+
+		// Script to run on page load to check session storage
+		document.body.addEventListener('htmx:load', () => {
+			const postReloadData = sessionStorage.getItem('postReload');
+
+			if (postReloadData) {
+				sessionStorage.removeItem('postReload');
+				const data = JSON.parse(postReloadData);
+
+				if (data.action === 'openSettings') {
+					htmx.ajax('GET', '/settings/modal', '#modal-container');
+				}
+
+				setTimeout(() => {
+					if (data.tab) {
+						const tabButton = document.getElementById(`settings-tab-${data.tab}`);
+						if (tabButton) {
+							tabButton.click();
+						}
+					}
+					if (data.toastMessage) {
+						showToast(data.toastMessage);
+					}
+				}, 200);
+			}
 		});
+
+		// Listener for the Escape key
+		document.addEventListener('keydown', function (event) {
+			if (event.key === 'Escape') {
+				const modal = document.getElementById('modal-container');
+				if (modal) {
+					modal.innerHTML = '';
+				}
+			}
+		});
+
 	</script>
 	<script>
 	// Close modal on HX-Trigger "close_modal"

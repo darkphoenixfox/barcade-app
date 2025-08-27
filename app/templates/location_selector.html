@@ -1,0 +1,11 @@
+<form method="post" action="/select-location" class="flex items-center gap-2">
+    <label for="location_id" class="text-sm font-medium text-blue-200">Location:</label>
+    <select name="location_id" id="location_id" onchange="this.form.submit()"
+      class="bg-blue-900 border-blue-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-1.5">
+      {% for loc in locations %}
+        <option value="{{ loc.id }}" {% if loc.id == selected_location_id %}selected{% endif %}>
+          {{ loc.name }}
+        </option>
+      {% endfor %}
+    </select>
+</form>

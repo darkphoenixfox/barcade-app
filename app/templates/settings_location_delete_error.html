@@ -1,0 +1,14 @@
+<div id="settings-content" class="p-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200">
+  <h4 class="font-bold">Cannot Delete Location</h4>
+  <p class="text-sm mt-1">
+    You cannot delete the location <strong class="font-semibold">"{{ location_name }}"</strong> because it still has games assigned to it.
+    Please move or remove the games from this location before deleting it.
+  </p>
+  <button
+    hx-get="/settings/locations"
+    hx-target="#settings-content"
+    hx-swap="innerHTML"
+    class="mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+    &larr; Back to Locations
+  </button>
+</div>
