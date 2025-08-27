@@ -276,18 +276,20 @@ def settings_modal(request: Request, db: Session = Depends(get_db)):
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
 
-    settings = db.query(models.Settings).first()
     locations = db.query(models.Location).all()
+    location_id = request.session.get("location_id")
+    selected_location = db.query(models.Location).get(location_id) if location_id else None
     users = db.query(models.User).all()
     games = db.query(models.Game).all()
 
     return templates.TemplateResponse("settings_modal.html", {
         "request": request,
-        "settings": settings,
         "locations": locations,
+        "selected_location": selected_location,
         "users": users,
         "games": games
     })
+
 
 @app.get("/settings/location/{location_id}", response_class=HTMLResponse)
 def settings_location(request: Request, location_id: int, db: Session = Depends(get_db)):
@@ -301,8 +303,21 @@ def settings_location(request: Request, location_id: int, db: Session = Depends(
         "location": location
     })
 
+@app.get("/settings/location/{location_id}", response_class=HTMLResponse)
+def settings_location(request: Request, location_id: int, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
 
-@app.post("/settings/location/{location_id}/save")
+    location = db.query(models.Location).get(location_id)
+    locations = db.query(models.Location).all()
+    return templates.TemplateResponse("settings_location.html", {
+        "request": request,
+        "location": location,
+        "locations": locations
+    })
+
+@app.post("/settings/location/{location_id}/save", response_class=HTMLResponse)
 def settings_location_save(
     request: Request,
     location_id: int,
@@ -312,16 +327,27 @@ def settings_location_save(
     token_value: float = Form(...),
     db: Session = Depends(get_db)
 ):
+    # Ensure user is admin
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
 
+    # Fetch the location
     location = db.query(models.Location).get(location_id)
-    if location:
-        location.rows = rows
-        location.columns = columns
-        location.cell_size = cell_size
-        location.token_value = token_value
-        db.commit()
+    if not location:
+        return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
 
-    return RedirectResponse("/settings/modal", status_code=303)
+    # Update values
+    location.rows = rows
+    location.columns = columns
+    location.cell_size = cell_size
+    location.token_value = token_value
+    db.commit()
+    db.refresh(location)
+
+    # ✅ Return updated form fragment so HTMX swaps content
+    return templates.TemplateResponse("settings_location.html", {
+        "request": request,
+        "location": location
+    })
+

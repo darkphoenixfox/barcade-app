@@ -1,19 +1,30 @@
-<form method="post" action="/settings/location/{{ location.id }}/save" class="space-y-4">
+<form 
+  hx-post="/settings/location/{{ location.id }}/save"
+  hx-target="#settings-content"
+  hx-swap="innerHTML"
+  class="space-y-4">
   <div>
     <label class="block text-sm font-medium">Rows</label>
-    <input type="number" name="rows" value="{{ location.rows }}" class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
+    <input type="number" name="rows" value="{{ location.rows }}" 
+           class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
   </div>
   <div>
     <label class="block text-sm font-medium">Columns</label>
-    <input type="number" name="columns" value="{{ location.columns }}" class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
+    <input type="number" name="columns" value="{{ location.columns }}" 
+           class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
   </div>
   <div>
     <label class="block text-sm font-medium">Cell Size (px)</label>
-    <input type="number" name="cell_size" value="{{ location.cell_size }}" class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
+    <input type="number" name="cell_size" value="{{ location.cell_size }}" 
+           class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
   </div>
   <div>
     <label class="block text-sm font-medium">Token Value (€ per token)</label>
-    <input type="number" step="0.01" name="token_value" value="{{ location.token_value }}" class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
+    <input type="number" step="0.01" name="token_value" value="{{ location.token_value }}" 
+           class="w-full border rounded px-2 py-1 dark:bg-gray-800 dark:text-white">
   </div>
-  <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Save</button>
+  <button type="submit" 
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+    Save
+  </button>
 </form>
