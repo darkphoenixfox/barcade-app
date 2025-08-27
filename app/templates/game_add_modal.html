@@ -2,31 +2,23 @@
      onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
   <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
 
-    <h2 class="text-xl font-bold mb-4">Edit Game: {{ game.name }}</h2>
+    <h2 class="text-xl font-bold mb-4">Add New Game</h2>
 
     <form
-      hx-post="/settings/games/{{ game.id }}/edit"
+      hx-post="/settings/games/add"
       class="space-y-4"
       enctype="multipart/form-data"
       novalidate>
 
       <div>
-        <label class="block text-sm font-medium">Custom Icon (PNG, WEBP)</label>
-        <div class="flex items-center gap-4 mt-1">
-          {% if game.icon %}
-            <img src="/static/images/{{ game.icon }}" class="w-10 h-10 rounded object-cover" alt="Current Icon">
-          {% else %}
-            <img src="/static/default.png" class="w-10 h-10 rounded object-cover" alt="Default Icon">
-          {% endif %}
-          <input type="file" name="icon_upload" id="icon_upload" accept=".png,.webp"
-                 class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/50 dark:file:text-blue-300 dark:hover:file:bg-blue-900">
-        </div>
-        <p class="text-xs text-gray-500 mt-1">Uploading a new file will replace the current icon.</p>
+        <label for="icon_upload" class="block text-sm font-medium">Custom Icon (PNG, WEBP)</label>
+        <input type="file" name="icon_upload" id="icon_upload" accept=".png,.webp"
+               class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/50 dark:file:text-blue-300 dark:hover:file:bg-blue-900">
       </div>
 
       <div>
         <label for="name" class="block text-sm font-medium">Game Name</label>
-        <input type="text" name="name" id="name" value="{{ game.name }}" required
+        <input type="text" name="name" id="name" placeholder="e.g., Pac-Man" required
                class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
       </div>
 
@@ -36,9 +28,7 @@
           <select name="category_id" id="category_id" required
                   class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
             {% for category in categories %}
-              <option value="{{ category.id }}" {% if game.category_id == category.id %}selected{% endif %}>
-                {{ category.name }}
-              </option>
+              <option value="{{ category.id }}">{{ category.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -46,13 +36,9 @@
           <label for="location_id" class="block text-sm font-medium">Location</label>
           <select name="location_id" id="location_id"
                   class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
-            <option value="" {% if not game.location_id %}selected{% endif %}>
-              -- Unassigned --
-            </option>
+            <option value="">-- Unassigned --</option>
             {% for location in locations %}
-              <option value="{{ location.id }}" {% if game.location_id == location.id %}selected{% endif %}>
-                {{ location.name }}
-              </option>
+              <option value="{{ location.id }}">{{ location.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -61,12 +47,12 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
             <label for="x" class="block text-sm font-medium">Grid X</label>
-            <input type="number" name="x" id="x" value="{{ game.x or '0' }}"
+            <input type="number" name="x" id="x" value="1"
                    class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
         </div>
         <div>
             <label for="y" class="block text-sm font-medium">Grid Y</label>
-            <input type="number" name="y" id="y" value="{{ game.y or '0' }}"
+            <input type="number" name="y" id="y" value="1"
                    class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
         </div>
       </div>
@@ -76,17 +62,17 @@
         <div class="grid grid-cols-2 gap-4 mt-2">
             <div>
               <label for="poc_name" class="block text-xs font-medium">Name</label>
-              <input type="text" name="poc_name" id="poc_name" value="{{ game.poc_name or '' }}"
+              <input type="text" name="poc_name" id="poc_name"
                      class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
             </div>
             <div>
               <label for="poc_phone" class="block text-xs font-medium">Phone</label>
-              <input type="text" name="poc_phone" id="poc_phone" value="{{ game.poc_phone or '' }}"
+              <input type="text" name="poc_phone" id="poc_phone"
                      class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
             </div>
              <div class="col-span-2">
               <label for="poc_email" class="block text-xs font-medium">Email</label>
-              <input type="email" name="poc_email" id="poc_email" value="{{ game.poc_email or '' }}"
+              <input type="email" name="poc_email" id="poc_email"
                      class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
             </div>
         </div>
@@ -101,7 +87,7 @@
         </button>
         <button type="submit"
                 class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-          Save Changes
+          Create Game
         </button>
       </div>
     </form>

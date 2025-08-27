@@ -78,7 +78,8 @@ class Game(Base):
 	poc_phone = Column(String, nullable=True)
 
 	category_id = Column(Integer, ForeignKey("categories.id"))
-	location_id = Column(Integer, ForeignKey("locations.id"))
+	# --- MODIFIED --- Made location_id nullable
+	location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
 
 	category = relationship("Category", back_populates="games")
 	location = relationship("Location", back_populates="games")
