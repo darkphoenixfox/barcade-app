@@ -39,13 +39,13 @@
 					Settings
 				</button>
 			{% endif %}
-		{% else %}
-			<form method="post" action="/login" class="flex items-center gap-2">
-				<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
-					class="px-2 py-1 rounded text-black" required>
-				<button type="submit" class="bg-white text-blue-800 px-3 py-1 rounded font-semibold">Login</button>
-			</form>
-		{% endif %}
+			{% else %}
+				<form method="post" action="/login" class="flex items-center gap-2">
+					<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
+						class="px-2 py-1 rounded text-black" required>
+					<button type="submit" class="bg-white text-blue-800 px-3 py-1 rounded font-semibold">Login</button>
+				</form>
+			{% endif %}
 
 			<!-- Always show dark mode toggle -->
 			<button onclick="toggleDarkMode()" class="text-white hover:text-gray-300 text-xl ml-4">
@@ -60,6 +60,9 @@
 		{% block content %}{% endblock %}
 	</main>
 
+	<!-- Toast container -->
+	<div id="toast" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
 	<script>
 		function toggleDarkMode() {
 			const html = document.documentElement;
@@ -73,8 +76,31 @@
 				localStorage.theme = 'dark';
 			}
 		}
+
+		// Simple toast
+		function showToast(message) {
+			const wrap = document.getElementById('toast');
+			const el = document.createElement('div');
+			el.className = "pointer-events-auto bg-green-600 text-white px-4 py-2 rounded shadow";
+			el.textContent = message || "Saved";
+			wrap.appendChild(el);
+			setTimeout(() => {
+				el.classList.add('opacity-0');
+				el.classList.add('transition-opacity');
+				setTimeout(() => el.remove(), 300);
+			}, 2000);
+		}
+
+		// HTMX custom event handlers (fired via HX-Trigger header)
+		document.addEventListener('settings_saved', function (e) {
+			const msg = (e && e.detail && e.detail.message) ? e.detail.message : "Settings saved";
+			showToast(msg);
+		});
+
+		document.addEventListener('refresh_grid', function () {
+			// Full page reload to redraw grid with new rows/columns/cell size
+			window.location.reload();
+		});
 	</script>
-
-
 </body>
 </html>

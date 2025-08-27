@@ -11,6 +11,7 @@ from fastapi import Form, HTTPException
 from app.models import Game, LogEntry, RevenueEntry
 from app.database import engine
 from app.models import Base
+import json
 
 # Create all tables at startup if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -319,35 +320,41 @@ def settings_location(request: Request, location_id: int, db: Session = Depends(
 
 @app.post("/settings/location/{location_id}/save", response_class=HTMLResponse)
 def settings_location_save(
-    request: Request,
-    location_id: int,
-    rows: int = Form(...),
-    columns: int = Form(...),
-    cell_size: int = Form(...),
-    token_value: float = Form(...),
-    db: Session = Depends(get_db)
+	request: Request,
+	location_id: int,
+	rows: int = Form(...),
+	columns: int = Form(...),
+	cell_size: int = Form(...),
+	token_value: float = Form(...),
+	db: Session = Depends(database.get_db)
 ):
-    # Ensure user is admin
-    user = get_current_user(request, db)
-    if not user or user.role != models.UserRole.admin:
-        return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+	# Ensure user is admin
+	user = crud.get_user_by_pin(db, request.session.get("pin")) if request.session.get("pin") else None
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
 
-    # Fetch the location
-    location = db.query(models.Location).get(location_id)
-    if not location:
-        return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
+	# Fetch the location
+	location = db.query(models.Location).get(location_id)
+	if not location:
+		return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
 
-    # Update values
-    location.rows = rows
-    location.columns = columns
-    location.cell_size = cell_size
-    location.token_value = token_value
-    db.commit()
-    db.refresh(location)
+	# Update values
+	location.rows = rows
+	location.columns = columns
+	location.cell_size = cell_size
+	location.token_value = token_value
+	db.commit()
+	db.refresh(location)
 
-    # ✅ Return updated form fragment so HTMX swaps content
-    return templates.TemplateResponse("settings_location.html", {
-        "request": request,
-        "location": location
-    })
-
+	# Return the updated fragment AND trigger two custom HTMX events:
+	#  - settings_saved: shows a toast with e.detail.message
+	#  - refresh_grid: reloads the main page to redraw the grid
+	response = templates.TemplateResponse("settings_location.html", {
+		"request": request,
+		"location": location
+	})
+	response.headers["HX-Trigger"] = json.dumps({
+		"settings_saved": {"message": "Floorplan settings saved"},
+		"refresh_grid": True
+	})
+	return response
