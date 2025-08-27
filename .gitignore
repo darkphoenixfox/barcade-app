@@ -52,3 +52,6 @@ coverage.xml
 # Mac / Linux / Windows system files
 .DS_Store
 Thumbs.db
+
+# Ignore images in the static folder
+static/images/*
