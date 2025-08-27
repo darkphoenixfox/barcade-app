@@ -12,6 +12,8 @@ from app.models import Game, LogEntry, RevenueEntry
 from app.database import engine
 from app.models import Base
 import json
+from typing import Optional
+
 
 # Create all tables at startup if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -291,19 +293,6 @@ def settings_modal(request: Request, db: Session = Depends(get_db)):
         "games": games
     })
 
-
-@app.get("/settings/location/{location_id}", response_class=HTMLResponse)
-def settings_location(request: Request, location_id: int, db: Session = Depends(get_db)):
-    user = get_current_user(request, db)
-    if not user or user.role != models.UserRole.admin:
-        return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
-
-    location = db.query(models.Location).get(location_id)
-    return templates.TemplateResponse("settings_location.html", {
-        "request": request,
-        "location": location
-    })
-
 @app.get("/settings/location/{location_id}", response_class=HTMLResponse)
 def settings_location(request: Request, location_id: int, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -358,3 +347,84 @@ def settings_location_save(
 		"refresh_grid": True
 	})
 	return response
+
+@app.get("/settings/games", response_class=HTMLResponse)
+def settings_games(request: Request, db: Session = Depends(get_db)):
+	user = get_current_user(request, db)
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+
+	games = crud.get_all_games(db)
+
+	return templates.TemplateResponse("settings_games.html", {
+		"request": request,
+		"user": user,
+		"games": games
+	})
+
+@app.get("/settings/games/{game_id}/edit", response_class=HTMLResponse)
+def edit_game_modal(request: Request, game_id: int, db: Session = Depends(get_db)):
+	user = get_current_user(request, db)
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+
+	game = db.query(models.Game).filter_by(id=game_id).first()
+	categories = db.query(models.Category).order_by(models.Category.name).all()
+
+	if not game:
+		return HTMLResponse("<div class='p-4'>Game not found.</div>", status_code=404)
+
+	return templates.TemplateResponse("game_edit_modal.html", {
+		"request": request,
+		"user": user,
+		"game": game,
+		"categories": categories
+	})
+
+
+@app.post("/settings/games/{game_id}/edit", response_class=HTMLResponse)
+def save_game_changes(
+	request: Request,
+	game_id: int,
+	name: str = Form(...),
+	category_id: int = Form(...),
+	poc_name: Optional[str] = Form(None),
+	poc_email: Optional[str] = Form(None),
+	poc_phone: Optional[str] = Form(None),
+	db: Session = Depends(get_db)
+):
+
+	user = get_current_user(request, db)
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+
+	game = db.query(models.Game).filter_by(id=game_id).first()
+	if not game:
+		return HTMLResponse("<div class='p-4'>Game not found.</div>", status_code=404)
+
+	game.name = name
+	game.category_id = category_id
+	game.poc_name = poc_name or None
+	game.poc_email = poc_email or None
+	game.poc_phone = poc_phone or None
+
+	db.commit()
+
+	# After saving, reload the games tab in-place
+	games = crud.get_all_games(db)
+	response = templates.TemplateResponse("settings_games.html", {
+	"request": request,
+	"user": user,
+	"games": games
+	})
+	response.headers["HX-Trigger"] = json.dumps({
+		"settings_saved": {"message": "Game updated"},
+		"close_modal": True
+	})
+	return response
+
+
+@app.post("/debug/echo", response_class=HTMLResponse)
+async def echo(request: Request):
+	form = await request.form()
+	return HTMLResponse(f"<pre>{dict(form)}</pre>")

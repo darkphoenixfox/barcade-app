@@ -32,6 +32,10 @@ def get_games_by_location(db: Session, location_id: int):
 def get_game_by_id(db: Session, game_id: int):
 	return db.query(models.Game).filter(models.Game.id == game_id).first()
 
+def get_all_games(db: Session):
+	return db.query(models.Game).order_by(models.Game.name).all()
+
+
 def update_game_status(db: Session, game: models.Game, status: GameStatus, user_id: int, comment: str = ""):
 	game.status = status
 	log = LogEntry(

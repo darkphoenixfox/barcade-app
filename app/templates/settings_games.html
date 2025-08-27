@@ -1,0 +1,55 @@
+<!-- app/templates/settings_games.html -->
+<div id="settings-content">  <!-- ADD THIS WRAPPER -->
+	<div class="space-y-4">
+		<h3 class="text-lg font-semibold">Manage Games</h3>
+
+		<button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+			+ Add Game
+		</button>
+
+		<table class="w-full text-sm mt-4 border rounded overflow-hidden">
+			<thead class="bg-gray-200 dark:bg-gray-800 text-left">
+				<tr>
+					<th class="px-3 py-2">Name</th>
+					<th class="px-3 py-2">Type</th>
+					<th class="px-3 py-2">Contact</th>
+					<th class="px-3 py-2 text-right">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for game in games %}
+					<tr class="border-t dark:border-gray-700">
+						<td class="px-3 py-2">{{ game.name }}</td>
+						<td class="px-3 py-2">{{ game.category.name|title if game.category else "—" }}</td>
+						<td class="px-3 py-2 text-sm">
+							{% if game.contact_name %}
+								{{ game.contact_name }}<br>
+								<span class="text-gray-500 text-xs">{{ game.contact_email or '' }}</span><br>
+								<span class="text-gray-500 text-xs">{{ game.contact_phone or '' }}</span>
+							{% else %}
+								<em class="text-gray-400">—</em>
+							{% endif %}
+						</td>
+						<td class="px-3 py-2 text-right space-x-2">
+							<button 
+								hx-get="/settings/games/{{ game.id }}/edit"
+								hx-target="#modal-container"
+								hx-swap="innerHTML"
+								class="text-blue-600 hover:underline text-xs">
+								Edit
+							</button>
+
+							<button class="text-red-600 hover:underline text-xs">Remove</button>
+						</td>
+					</tr>
+				{% else %}
+					<tr>
+						<td colspan="4" class="px-3 py-4 text-center text-gray-500">
+							No games found.
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+</div>

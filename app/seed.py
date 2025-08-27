@@ -44,8 +44,8 @@ def run():
             name="Street Fighter II",
             category_id=arcade_cat.id,
             location_id=location.id,
-            x=0,
-            y=0,
+            x=2,
+            y=2,
             status=models.GameStatus.working
         )
         db.add(sf2)
@@ -56,8 +56,8 @@ def run():
             name="Indiana Jones",
             category_id=pinball_cat.id,
             location_id=location.id,
-            x=1,
-            y=0,
+            x=4,
+            y=3,
             status=models.GameStatus.working
         )
         db.add(indiana)

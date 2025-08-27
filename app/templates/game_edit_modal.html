@@ -1,0 +1,59 @@
+<div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+	<div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-lg relative">
+		<h3 class="text-lg font-semibold mb-4">Edit Game</h3>
+
+		<form
+			hx-post="/settings/games/{{ game.id }}/edit"
+			hx-target="#settings-content"
+			hx-swap="innerHTML"
+		>
+			<div class="mb-3">
+				<label class="block text-sm font-medium mb-1">Name</label>
+				<input name="name" type="text" value="{{ game.name }}" required
+					   class="w-full rounded border px-3 py-2 dark:bg-gray-700 dark:text-white">
+			</div>
+
+			<div class="mb-3">
+				<label class="block text-sm font-medium mb-1">Category</label>
+				<select name="category_id" required
+						class="w-full rounded border px-3 py-2 dark:bg-gray-700 dark:text-white">
+					{% for category in categories %}
+						<option value="{{ category.id }}" {% if category.id == game.category_id %}selected{% endif %}>
+							{{ category.name|title }}
+						</option>
+					{% endfor %}
+				</select>
+			</div>
+
+			<div class="mb-3">
+				<label class="block text-sm font-medium mb-1">Contact Name</label>
+				<input name="poc_name" type="text" value="{{ game.poc_name or '' }}"
+					   class="w-full rounded border px-3 py-2 dark:bg-gray-700 dark:text-white">
+			</div>
+
+			<div class="mb-3">
+				<label class="block text-sm font-medium mb-1">Contact Email</label>
+				<input name="poc_email" type="email" value="{{ game.poc_email or '' }}"
+					   class="w-full rounded border px-3 py-2 dark:bg-gray-700 dark:text-white">
+			</div>
+
+			<div class="mb-3">
+				<label class="block text-sm font-medium mb-1">Contact Phone</label>
+				<input name="poc_phone" type="text" value="{{ game.poc_phone or '' }}"
+					   class="w-full rounded border px-3 py-2 dark:bg-gray-700 dark:text-white">
+			</div>
+
+			<div class="flex justify-end mt-4">
+				<button type="button"
+						onclick="document.getElementById('modal-container').innerHTML = ''"
+						class="px-4 py-2 mr-2 rounded bg-gray-300 hover:bg-gray-400 text-black dark:text-black">
+					Cancel
+				</button>
+				<button type="submit"
+						class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
+					Save
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
