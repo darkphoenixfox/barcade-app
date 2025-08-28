@@ -15,7 +15,6 @@ from .utils import install_template_filters
 from .models import Game, LogEntry, RevenueEntry, UserRole
 from .database import engine, SessionLocal
 from .models import Base
-from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta, timezone
 
@@ -655,41 +654,183 @@ def settings_locations(request: Request, db: Session = Depends(get_db)):
 		"locations": locations
 	})
 
+@app.get("/settings/categories", response_class=HTMLResponse)
+def settings_categories(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    categories = crud.get_categories(db)
+    return templates.TemplateResponse("settings_categories.html", {
+        "request": request,
+        "user": user,
+        "categories": categories
+    })
+
+@app.get("/settings/category/add", response_class=HTMLResponse)
+def add_category_form(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    return templates.TemplateResponse("category_add_modal.html", {
+        "request": request
+    })
+
+@app.post("/settings/category/add", response_class=HTMLResponse)
+def save_new_category(
+    request: Request,
+    name: str = Form(...),
+    icon: str | None = Form(None),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    # Uniqueness check (name is unique in model)
+    existing = crud.get_category_by_name(db, name.strip())
+    if existing:
+        return templates.TemplateResponse("category_add_modal.html", {
+            "request": request,
+            "error": f"A category named '{name}' already exists.",
+            "name": name,
+            "icon": icon or ""
+        }, status_code=200)
+
+    new_cat = crud.create_category(db, name=name, icon=icon)
+
+    trigger = {
+        "settings_saved": {"message": f"Category '{new_cat.name}' created."}
+    }
+    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger)})
+
+@app.get("/settings/category/{category_id}/edit", response_class=HTMLResponse)
+def edit_category_form(category_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    category = crud.get_category_by_id(db, category_id)
+    if not category:
+        return HTMLResponse("<p>Category not found</p>", status_code=404)
+
+    return templates.TemplateResponse("category_edit_modal.html", {
+        "request": request,
+        "category": category
+    })
+
+@app.post("/settings/category/{category_id}/edit", response_class=HTMLResponse)
+def save_category_changes(
+    category_id: int,
+    request: Request,
+    name: str = Form(...),
+    icon: str | None = Form(None),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    category = crud.get_category_by_id(db, category_id)
+    if not category:
+        return HTMLResponse("<p>Category not found</p>", status_code=404)
+
+    # Prevent duplicate name (other record)
+    existing = crud.get_category_by_name(db, name.strip())
+    if existing and existing.id != category.id:
+        return templates.TemplateResponse("category_edit_modal.html", {
+            "request": request,
+            "category": category,
+            "error": f"A category named '{name}' already exists."
+        }, status_code=200)
+
+    updated = crud.update_category(db, category, name=name, icon=icon)
+
+    trigger = {
+        "settings_saved": {"message": f"Category '{updated.name}' updated."}
+    }
+    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger)})
+
+@app.delete("/settings/category/{category_id}/delete", response_class=HTMLResponse)
+def delete_category(category_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    category = crud.get_category_by_id(db, category_id)
+    if not category:
+        return HTMLResponse("<p>Category not found</p>", status_code=404)
+
+    name = category.name
+    if category.games:
+        return HTMLResponse("<p>Cannot delete: category in use by games.</p>", status_code=400)
+
+    crud.delete_category(db, category)
+
+    # Return refreshed tab (like users/location delete flows)
+    response = settings_categories(request, db=db)
+    response.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": f"Category '{name}' deleted."}
+    })
+    return response
+
 @app.get("/settings/admin", response_class=HTMLResponse)
 def settings_admin_tab(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<p>Unauthorized</p>", status_code=403)
-    return templates.TemplateResponse("settings_admin.html", {"request": request})
+
+    games = db.query(models.Game).order_by(models.Game.name).all()
+    return templates.TemplateResponse("settings_admin.html", {
+        "request": request,
+        "user": user,
+        "games": games,
+    })
+
 
 
 @app.post("/settings/clear-status-history", response_class=HTMLResponse)
-def clear_status_history(request: Request, db: Session = Depends(get_db)):
+def clear_status_history(request: Request, game_id: int = Form(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
-    crud.clear_all_log_entries(db)
+    # Clear only the selected game's status logs
+    db.query(models.LogEntry).filter(models.LogEntry.game_id == game_id).delete(synchronize_session=False)
+    db.commit()
 
-    response = templates.TemplateResponse("settings_admin.html", {"request": request})
-    response.headers["HX-Trigger"] = json.dumps({
-        "settings_saved": {"message": "All status history has been cleared."}
+    games = db.query(models.Game).order_by(models.Game.name).all()
+    resp = templates.TemplateResponse("settings_admin.html", {
+        "request": request,
+        "user": user,
+        "games": games,
     })
-    return response
+    resp.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": "Status history cleared for the selected game."}
+    })
+    return resp
 
 @app.post("/settings/clear-revenue-history", response_class=HTMLResponse)
-def clear_revenue_history(request: Request, db: Session = Depends(get_db)):
+def clear_revenue_history(request: Request, game_id: int = Form(...), db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
-    crud.clear_all_revenue_entries(db)
+    # Clear only the selected game's revenue
+    db.query(models.RevenueEntry).filter(models.RevenueEntry.game_id == game_id).delete(synchronize_session=False)
+    db.commit()
 
-    response = templates.TemplateResponse("settings_admin.html", {"request": request})
-    response.headers["HX-Trigger"] = json.dumps({
-        "settings_saved": {"message": "All revenue history has been cleared."}
+    games = db.query(models.Game).order_by(models.Game.name).all()
+    resp = templates.TemplateResponse("settings_admin.html", {
+        "request": request,
+        "user": user,
+        "games": games,
     })
-    return response
+    resp.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": "Revenue history cleared for the selected game."}
+    })
+    return resp
 
 
 @app.get("/settings/location/add", response_class=HTMLResponse)

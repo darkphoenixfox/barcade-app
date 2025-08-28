@@ -28,6 +28,13 @@
           Games
         </button>
         <button
+          id="settings-tab-categories" hx-get="/settings/categories"
+          hx-target="#settings-content"
+          hx-swap="innerHTML"
+          class="hover:underline">
+          Categories
+        </button>
+        <button
           id="settings-tab-users" hx-get="/settings/users"
           hx-target="#settings-content"
           hx-swap="innerHTML"
@@ -52,3 +59,4 @@
       </div>
   </div>
 </div>
+

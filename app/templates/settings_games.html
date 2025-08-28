@@ -1,71 +1,100 @@
-<!-- app/templates/settings_games.html -->
-<div id="settings-content" class="fade-in">
-  <div class="flex justify-between items-center mb-4">
-    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Manage Games</h3>
-    <!-- MODIFIED: Button is now functional -->
+<div class="settings-pane mx-auto w-full max-w-5xl bg-white dark:bg-gray-800 rounded-lg shadow">
+  <!-- Toolbar -->
+  <div class="flex items-center justify-between gap-3 p-4 border-b dark:border-gray-700">
+    <input id="filter-games" type="text" placeholder="Filter by name"
+           class="w-full max-w-sm border rounded px-3 py-2 text-sm dark:bg-gray-900 dark:border-gray-700"
+           aria-label="Filter games by name">
+    {% if user.role == 'admin' %}
     <button
       hx-get="/settings/games/add"
       hx-target="#modal-container"
       hx-swap="innerHTML"
-      class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-      <i class="fa-solid fa-plus mr-2"></i>
-      <span>Add Game</span>
+      class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded">
+      Add game
     </button>
+    {% endif %}
   </div>
 
-  <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
-    <table class="min-w-full text-sm text-left text-gray-700 dark:text-gray-300">
-      <thead class="bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-        <tr>
-          <th scope="col" class="px-6 py-3">Name</th>
-          <th scope="col" class="px-6 py-3">Type</th>
-          <th scope="col" class="px-6 py-3">Location</th>
-          <th scope="col" class="px-6 py-3">Contact</th>
-          <th scope="col" class="px-6 py-3 text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for game in games %}
-        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-          <td class="px-6 py-4 font-medium whitespace-nowrap">{{ game.name }}</td>
-          <td class="px-6 py-4">{{ game.category.name|title if game.category else "—" }}</td>
-          <td class="px-6 py-4">
-            <span class="font-medium">
-              {{ game.location.name if game.location else "Unassigned" }}
-            </span>
-          </td>
-          <td class="px-6 py-4">
-            {% if game.poc_name %}
-              <div class="font-medium">{{ game.poc_name }}</div>
-              <div class="text-xs text-gray-500">{{ game.poc_email or '' }}</div>
-              <div class="text-xs text-gray-500">{{ game.poc_phone or '' }}</div>
-            {% else %}
-              <em class="text-gray-400">—</em>
-            {% endif %}
-          </td>
-          <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-            <button
-              hx-get="/settings/games/{{ game.id }}/edit"
-              hx-target="#modal-container"
-              hx-swap="innerHTML"
-              class="font-medium text-blue-600 dark:text-blue-500 hover:underline">
-              Edit
-            </button>
-            <button
-              onclick="return confirm('Are you sure you want to delete this game?')"
-              class="font-medium text-red-600 dark:text-red-500 hover:underline">
-              Delete
-            </button>
-          </td>
-        </tr>
-        {% else %}
-        <tr >
-          <td colspan="5" class="px-6 py-10 text-center text-gray-500">
-            No games found.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <div class="overflow-x-auto">
+  <table class="min-w-full text-sm text-left text-gray-700 dark:text-gray-300">
+    <thead class="bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider sticky top-0 z-10">
+      <tr>
+        <th class="px-6 py-3">Name</th>
+        <th class="px-6 py-3">Type</th>
+        <th class="px-6 py-3">Location</th>
+        <th class="px-6 py-3">Contact</th>
+        <th class="px-6 py-3 text-right">Actions</th>
+      </tr>
+    </thead>
+  </table>
 </div>
+
+<!-- Fixed-height scroll area -->
+<div class="overflow-y-auto h-[420px]">
+  <table class="min-w-full text-sm text-left text-gray-700 dark:text-gray-300">
+    <tbody id="games-rows">
+      {% for game in games %}
+      <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+        <td class="px-6 py-3 font-medium whitespace-nowrap truncate max-w-[240px]">
+          {{ game.name }}
+        </td>
+        <td class="px-6 py-3 whitespace-nowrap">
+          {{ game.category.name|title if game.category else "—" }}
+        </td>
+        <td class="px-6 py-3 whitespace-nowrap">
+          <span class="font-medium truncate max-w-[200px] inline-block align-middle">
+            {{ game.location.name if game.location else "Unassigned" }}
+          </span>
+        </td>
+        <td class="px-6 py-3">
+          {% if game.poc_name %}
+            <div class="truncate max-w-[220px]">{{ game.poc_name }}</div>
+            <!-- Optional: show only name here to keep rows tight; details live in Edit modal -->
+            {# <div class="text-xs text-gray-500 truncate max-w-[220px]">{{ game.poc_email or '' }}</div>
+               <div class="text-xs text-gray-500 truncate max-w-[220px]">{{ game.poc_phone or '' }}</div> #}
+          {% else %}
+            <em class="text-gray-400">—</em>
+          {% endif %}
+        </td>
+        <td class="px-6 py-3 text-right space-x-2 whitespace-nowrap">
+          {% if user.role == 'admin' %}
+          <button
+            hx-get="/settings/games/{{ game.id }}/edit"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+            class="btn btn-sm bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-black dark:text-white py-1 px-3 rounded">
+            Edit
+          </button>
+          <button
+            hx-delete="/settings/games/{{ game.id }}/delete"
+            hx-confirm="Are you sure you want to delete the game '{{ game.name }}'?"
+            hx-target="#settings-content"
+            hx-swap="innerHTML"
+            class="btn btn-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded">
+            Delete
+          </button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-6 py-10 text-center text-gray-500">No games found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+  const input = document.getElementById('filter-games');
+  const tbody = document.getElementById('games-rows');
+  if (!input || !tbody) return;
+  input.addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    for (const row of tbody.rows) {
+      const firstCell = row.cells[0];
+      if (!firstCell) continue;
+      row.style.display = firstCell.textContent.toLowerCase().includes(q) ? '' : 'none';
+    }
+  });
+})();
+</script>

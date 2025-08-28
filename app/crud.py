@@ -64,8 +64,33 @@ def delete_location(db: Session, location: Location):
 
 # ----------- CATEGORIES -----------
 
+
 def get_categories(db: Session):
-	return db.query(models.Category).all()
+    return db.query(models.Category).order_by(models.Category.name).all()
+
+def get_category_by_id(db: Session, category_id: int):
+    return db.query(models.Category).filter(models.Category.id == category_id).first()
+
+def get_category_by_name(db: Session, name: str):
+    return db.query(models.Category).filter(models.Category.name == name).first()
+
+def create_category(db: Session, name: str, icon: str | None = None):
+    cat = models.Category(name=name.strip(), icon=icon or None)
+    db.add(cat)
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+def update_category(db: Session, category: models.Category, name: str, icon: str | None = None):
+    category.name = name.strip()
+    category.icon = icon or None
+    db.commit()
+    db.refresh(category)
+    return category
+
+def delete_category(db: Session, category: models.Category):
+    db.delete(category)
+    db.commit()
 
 # ----------- GAMES -----------
 
@@ -194,4 +219,15 @@ def clear_all_log_entries(db: Session):
 
 def clear_all_revenue_entries(db: Session):
     db.query(RevenueEntry).delete()
+    db.commit()
+
+# crud.py
+def clear_status_history_for_game(db: Session, game_id: int):
+    # Replace models.StatusEntry with your actual status-history model/table
+    db.query(models.StatusEntry).filter(models.StatusEntry.game_id == game_id).delete(synchronize_session=False)
+    db.commit()
+
+def clear_revenue_history_for_game(db: Session, game_id: int):
+    # If your table is revenue_entries, update accordingly
+    db.query(models.RevenueEntry).filter(models.RevenueEntry.game_id == game_id).delete(synchronize_session=False)
     db.commit()
