@@ -10,12 +10,17 @@ from typing import Optional
 from pydantic import BaseModel
 import shutil
 from pathlib import Path
+
+# --- CORRECTED & UNIFIED IMPORTS ---
 from . import database, models, crud
 from .utils import install_template_filters
 from .models import Game, LogEntry, RevenueEntry, UserRole
 from .database import engine, SessionLocal
 from .models import Base
+# --- END CORRECTIONS ---
 
+
+# Pydantic schema for location form data
 class LocationUpdateForm(BaseModel):
 	name: str
 	rows: int
@@ -29,6 +34,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="barcade-secret")
 
+# CORRECTED: Reverted to the paths that match your Docker structure
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -122,16 +128,7 @@ def game_modal(game_id: int, request: Request, db: Session = Depends(get_db)):
 	game = crud.get_game_by_id(db, game_id)
 
 	if not user:
-		return HTMLResponse("""
-			<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-				<div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6 relative text-center">
-					<button class="absolute top-2 right-3 text-gray-500 hover:text-black text-xl"
-							onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
-					<h2 class="text-xl font-bold text-gray-800 mb-2">Please Log In</h2>
-					<p class="text-sm text-gray-600">You must be logged in to view game details and report status or revenue.</p>
-				</div>
-			</div>
-		""", status_code=200)
+		return HTMLResponse("Unauthorized", status_code=401)
 
 
 	return templates.TemplateResponse("game_modal.html", {
@@ -286,11 +283,10 @@ def revenue_history(request: Request, game_id: int, db: Session = Depends(get_db
 def settings_modal(request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	locations = db.query(models.Location).all()
-	location_id = request.session.get("location_id")
-	selected_location = db.query(models.Location).get(location_id) if location_id else None
+	selected_location = crud.get_location_by_id(db, get_selected_location(request))
 	users = db.query(models.User).all()
 	games = db.query(models.Game).all()
 
@@ -307,7 +303,7 @@ def settings_modal(request: Request, db: Session = Depends(get_db)):
 def settings_locations(request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	locations = crud.get_locations(db)
 
@@ -358,37 +354,26 @@ def clear_revenue_history(request: Request, db: Session = Depends(get_db)):
 def add_location_form(request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	return templates.TemplateResponse("location_add_modal.html", {"request": request})
 
 
 @app.post("/settings/location/add", response_class=HTMLResponse)
 def save_new_location(
-	request: Request,
-	name: str = Form(...),
-	rows: int = Form(...),
-	columns: int = Form(...),
-	cell_size: int = Form(...),
-	token_value: float = Form(...),
-	db: Session = Depends(get_db)
+	request: Request, name: str = Form(...), rows: int = Form(...),
+	columns: int = Form(...), cell_size: int = Form(...),
+	token_value: float = Form(...), db: Session = Depends(get_db)
 ):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	new_location = crud.create_location(
-		db=db,
-		name=name,
-		rows=rows,
-		columns=columns,
-		cell_size=cell_size,
-		token_value=token_value
+		db=db, name=name, rows=rows, columns=columns,
+		cell_size=cell_size, token_value=token_value
 	)
-
-	trigger_data = {
-		"location_saved": {"message": f"Location '{new_location.name}' created"}
-	}
+	trigger_data = {"location_saved": {"message": f"Location '{new_location.name}' created"}}
 	return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
 
 
@@ -396,11 +381,11 @@ def save_new_location(
 def edit_location_form(location_id: int, request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	location = crud.get_location_by_id(db, location_id)
 	if not location:
-		return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
+		return HTMLResponse("<p>Location not found</p>", status_code=404)
 
 	return templates.TemplateResponse("location_edit_modal.html", {
 		"request": request,
@@ -409,22 +394,18 @@ def edit_location_form(location_id: int, request: Request, db: Session = Depends
 
 @app.post("/settings/location/{location_id}/edit", response_class=HTMLResponse)
 def save_location_edit(
-	request: Request,
-	location_id: int,
-	name: str = Form(...),
-	rows: int = Form(...),
-	columns: int = Form(...),
-	cell_size: int = Form(...),
-	token_value: float = Form(...),
+	request: Request, location_id: int, name: str = Form(...),
+	rows: int = Form(...), columns: int = Form(...),
+	cell_size: int = Form(...), token_value: float = Form(...),
 	db: Session = Depends(get_db)
 ):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	location_to_update = crud.get_location_by_id(db, location_id)
 	if not location_to_update:
-		return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
+		return HTMLResponse("<p>Location not found</p>", status_code=404)
 
 	location_to_update.name = name
 	location_to_update.rows = rows
@@ -434,9 +415,7 @@ def save_location_edit(
 	db.commit()
 	db.refresh(location_to_update)
 
-	trigger_data = {
-		"location_saved": {"message": f"Location '{location_to_update.name}' updated"}
-	}
+	trigger_data = {"location_saved": {"message": f"Location '{location_to_update.name}' updated"}}
 	return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
 
 
@@ -444,17 +423,18 @@ def save_location_edit(
 def delete_location(location_id: int, request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	location_to_delete = crud.get_location_by_id(db, location_id)
 	if not location_to_delete:
-		return HTMLResponse("<div class='p-4'>Location not found.</div>", status_code=404)
+		return HTMLResponse("<p>Location not found</p>", status_code=404)
 	
 	if location_to_delete.games:
+		# Change the status code on this response to 200
 		return templates.TemplateResponse("settings_location_delete_error.html", {
 			"request": request,
 			"location_name": location_to_delete.name
-		})
+		}, status_code=200) # <-- MODIFIED
 
 	location_name = location_to_delete.name
 	crud.delete_location(db, location_to_delete)
@@ -471,7 +451,7 @@ def delete_location(location_id: int, request: Request, db: Session = Depends(ge
 def settings_games(request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
 	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
 	games = crud.get_all_games(db)
 
@@ -520,11 +500,13 @@ def save_new_user(
 
     existing_user = crud.get_user_by_pin(db, pin)
     if existing_user:
-        return templates.TemplateResponse("user_add_modal.html", {
+        return templates.TemplateResponse("_user_add_form.html", {
             "request": request,
             "roles": models.UserRole,
-            "error": f"PIN '{pin}' is already taken by user '{existing_user.name}'."
-        }, status_code=422)
+            "name": name,
+            "role": role.value,
+            "error": f"PIN '{pin}' is already taken by another user."
+        }, status_code=200)
 
     new_user = crud.create_user(db, name=name, pin=pin, role=role)
 
@@ -599,7 +581,7 @@ def save_user_changes(
 def add_game_form(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
-        return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
     categories = db.query(models.Category).order_by(models.Category.name).all()
     locations = crud.get_locations(db)
@@ -626,96 +608,8 @@ def save_new_game(
 ):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
-        return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
     icon_filename = None
     if icon_upload and icon_upload.filename:
-        save_path = Path("app/static/images") / icon_upload.filename
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        with save_path.open("wb") as buffer:
-            shutil.copyfileobj(icon_upload.file, buffer)
-        icon_filename = icon_upload.filename
-
-    new_game = crud.create_game(
-        db=db,
-        name=name,
-        category_id=category_id,
-        location_id=location_id,
-        x=x,
-        y=y,
-        poc_name=poc_name,
-        poc_email=poc_email,
-        poc_phone=poc_phone,
-        icon=icon_filename
-    )
-
-    trigger_data = {
-        "game_saved": {"message": f"Game '{new_game.name}' created"}
-    }
-    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
-
-@app.get("/settings/games/{game_id}/edit", response_class=HTMLResponse)
-def edit_game_modal(request: Request, game_id: int, db: Session = Depends(get_db)):
-	user = get_current_user(request, db)
-	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
-
-	game = db.query(models.Game).filter_by(id=game_id).first()
-	if not game:
-		return HTMLResponse("<div class='p-4'>Game not found.</div>", status_code=404)
-	
-	categories = db.query(models.Category).order_by(models.Category.name).all()
-	locations = crud.get_locations(db)
-
-	return templates.TemplateResponse("game_edit_modal.html", {
-		"request": request,
-		"user": user,
-		"game": game,
-		"categories": categories,
-		"locations": locations
-	})
-
-@app.post("/settings/games/{game_id}/edit", response_class=HTMLResponse)
-def save_game_changes(
-	request: Request,
-	game_id: int,
-	name: str = Form(...),
-	category_id: int = Form(...),
-	location_id: Optional[int] = Form(None),
-	x: Optional[int] = Form(None),
-	y: Optional[int] = Form(None),
-	poc_name: Optional[str] = Form(None),
-	poc_email: Optional[str] = Form(None),
-	poc_phone: Optional[str] = Form(None),
-    icon_upload: UploadFile = File(None),
-	db: Session = Depends(get_db)
-):
-	user = get_current_user(request, db)
-	if not user or user.role != models.UserRole.admin:
-		return HTMLResponse("<div class='p-4'>Unauthorized</div>", status_code=403)
-
-	game = db.query(models.Game).filter_by(id=game_id).first()
-	if not game:
-		return HTMLResponse("<div class='p-4'>Game not found.</div>", status_code=404)
-
-	if icon_upload and icon_upload.filename:
-		save_path = Path("app/static/images") / icon_upload.filename
-		save_path.parent.mkdir(parents=True, exist_ok=True)
-		with save_path.open("wb") as buffer:
-			shutil.copyfileobj(icon_upload.file, buffer)
-		game.icon = icon_upload.filename
-	
-	game.name = name
-	game.category_id = category_id
-	game.location_id = location_id
-	game.x = x
-	game.y = y
-	game.poc_name = poc_name or None
-	game.poc_email = poc_email or None
-	game.poc_phone = poc_phone or None
-	db.commit()
-
-	trigger_data = {
-		"game_saved": {"message": f"Game '{game.name}' updated"}
-	}
-	return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
+        save_path = Path
