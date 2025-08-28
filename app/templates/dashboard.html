@@ -150,32 +150,50 @@
       const res = await fetch(`/game/${gameId}/move`, { method: 'POST', body: form });
       if (!res.ok) {
         const msg = await res.text();
-        if (window.showToast) showToast(msg || 'Move failed');
+        throw new Error(msg || 'Move failed');
+      }
+
+      const payload = await res.json().catch(() => ({}));
+
+      // Same-cell drop: snap back and exit (no success, no error toast)
+      if (payload && payload.unchanged) {
         snapToDataXY(tile);
-        tile.classList.remove('dragging');
         return;
       }
 
-      const payload = await res.json();
+      let didUpdate = false;
 
-      // Move dragged tile
-      tile.style.left = ((payload.moved.x - 1) * cellSize) + 'px';
-      tile.style.top  = ((payload.moved.y - 1) * cellSize) + 'px';
-      tile.dataset.x = String(payload.moved.x);
-      tile.dataset.y = String(payload.moved.y);
+      // If moved, update this tile
+      if (payload.moved) {
+        const d = payload.moved;
+        tile.style.left = ((d.x - 1) * cellSize) + 'px';
+        tile.style.top  = ((d.y - 1) * cellSize) + 'px';
+        tile.dataset.x = String(d.x);
+        tile.dataset.y = String(d.y);
+
+        const img = tile.querySelector('img');
+        if (img && d.icon) {
+          img.src = `/static/images/${d.icon}`;
+        }
+        didUpdate = true;
+      }
 
       // If swapped, update the other tile
       if (payload.swapped) {
-        const swapped = document.getElementById(`game-${payload.swapped.id}`);
+        const s = payload.swapped;
+        const swapped = document.getElementById(`game-${s.id}`);
         if (swapped) {
-          swapped.style.left = ((payload.swapped.x - 1) * cellSize) + 'px';
-          swapped.style.top  = ((payload.swapped.y - 1) * cellSize) + 'px';
-          swapped.dataset.x = String(payload.swapped.x);
-          swapped.dataset.y = String(payload.swapped.y);
+          swapped.style.left = ((s.x - 1) * cellSize) + 'px';
+          swapped.style.top  = ((s.y - 1) * cellSize) + 'px';
+          swapped.dataset.x = String(s.x);
+          swapped.dataset.y = String(s.y);
         }
+        didUpdate = true;
       }
 
-      if (window.showToast) showToast('Position updated');
+      // Only show success when an update actually occurred
+      if (didUpdate && window.showToast) showToast('Position updated');
+
     } catch {
       if (window.showToast) showToast('Network error moving game');
       snapToDataXY(tile);

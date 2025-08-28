@@ -20,9 +20,14 @@
 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
-	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center relative">
-		<h1 class="text-xl font-semibold">Barcade Management</h1>
-
+	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center relative min-h-14">
+		<div class="flex items-center h-8">
+		{% if has_logo %}
+			<img src="/static/images/logo.png" alt="Barcade Logo" class="h-8 w-auto">
+		{% else %}
+			<h1 class="text-xl font-semibold">Barcade Management</h1>
+		{% endif %}
+		</div>
         <div id="location-selector-container"
              class="absolute left-1/2 -translate-x-1/2"
              hx-get="/location-selector"
@@ -32,25 +37,39 @@
 
 		<div class="flex items-center gap-4">
 		{% if user %}
-			<span class="font-semibold">{{ user.name }}</span>
-			<span class="bg-white text-blue-800 text-xs px-2 py-1 rounded uppercase ml-2">
+		<div class="flex items-baseline gap-2">
+			<span class="font-semibold leading-none whitespace-nowrap">{{ user.name }}</span>
+			<span class="text-xs font-semibold uppercase leading-none whitespace-nowrap
+				{% if user.role.value == 'admin' %} text-red-500 dark:text-red-400
+				{% elif user.role.value == 'user' %}  text-green-500 dark:text-green-400
+				{% else %}                           text-gray-400
+				{% endif %}
+			">
 				{% if user.role.value == "admin" %}ADMIN{% else %}{{ user.role.value|upper }}{% endif %}
 			</span>
-			<a href="/logout" class="underline hover:text-gray-300 ml-4">Logout</a>
+		</div>
 			{% if user.role.value == "admin" %}
-				<button
-					hx-get="/settings/modal"
-					hx-target="#modal-container"
-					hx-swap="innerHTML"
-					class="bg-white text-blue-800 text-xs px-2 py-1 rounded ml-2 font-semibold hover:bg-gray-200">
-					Settings
-				</button>
+			<button
+				hx-get="/settings/modal"
+				hx-target="#modal-container"
+				hx-swap="innerHTML"
+				class="h-8 inline-flex items-center px-3 rounded ml-2 font-semibold text-sm bg-white text-blue-800 hover:bg-gray-200">
+				Settings
+			</button>
 			{% endif %}
+			<a href="/logout"
+			class="h-8 inline-flex items-center px-3 rounded ml-2 font-semibold text-sm bg-white text-blue-800 hover:bg-gray-200">
+			Logout
+			</a>
+
 			{% else %}
 				<form method="post" action="/login" class="flex items-center gap-2">
-					<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
-						class="px-2 py-1 rounded text-black" required>
-					<button type="submit" class="bg-white text-blue-800 px-3 py-1 rounded font-semibold">Login</button>
+				<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
+					class="h-8 px-2 rounded text-black text-sm leading-none" required>
+				<button type="submit"
+					class="h-8 inline-flex items-center px-3 rounded font-semibold text-sm bg-white text-blue-800">
+					Login
+				</button>
 				</form>
 			{% endif %}
 
@@ -59,17 +78,15 @@
 				<i class="fa-solid fa-sun hidden dark:block"></i>
 			</button>
 		</div>
-
 	</header>
-
 	<main class="p-6">
 		{% block content %}{% endblock %}
 	</main>
-
-	<div id="toast" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
-
+	<div id="toast"
+     class="absolute right-4 mt-4 space-y-2 pointer-events-none"
+     style="top: 4rem;">
+	</div>
 	<div id="modal-container"></div>
-
 	<script>
 		function toggleDarkMode() {
 			const html = document.documentElement;
@@ -97,6 +114,35 @@
 				setTimeout(() => el.remove(), 300);
 			}, 2000);
 		}
+
+		document.body.addEventListener('htmx:afterOnLoad', function (evt) {
+			try {
+			const xhr = evt.detail && evt.detail.xhr;
+			if (!xhr) return;
+
+			// Only react to /game/{id}/move responses
+			const url = (xhr.responseURL || '');
+			if (!url.includes('/game/') || !url.includes('/move')) return;
+
+			// Try to read JSON and decide
+			const text = xhr.responseText || '';
+			if (!text) return;
+
+			let data;
+			try { data = JSON.parse(text); } catch { return; }
+
+			if (data && data.unchanged) {
+				// No toast when nothing moved
+				return;
+			}
+			if ((data && (data.moved || data.swapped))) {
+				// Show success toast only when a move/swap actually happened
+				showToast('Position updated');
+			}
+			} catch (e) {
+			// fail-quietly; no toast is better than a broken header
+			}
+		});
 
 		// Event listener for saving a location
 		document.addEventListener('location_saved', function (e) {
@@ -191,6 +237,6 @@
 			htmx.process(evt.detail.target);
 		}
 	});
-</script>
+	</script>
 </body>
 </html>

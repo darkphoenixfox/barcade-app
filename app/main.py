@@ -19,7 +19,6 @@ from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import JSONResponse
 
 
-# Pydantic schema for location form data
 class LocationUpdateForm(BaseModel):
 	name: str
 	rows: int
@@ -33,9 +32,12 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="barcade-secret")
 
-# CORRECTED: Reverted to the paths that match your Docker structure
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+from pathlib import Path
+templates.env.globals["has_logo"] = Path("app/static/images/logo.png").exists()
+
 
 install_template_filters(templates)
 
@@ -125,22 +127,27 @@ def move_game(
     if x < 1 or y < 1 or x > location.columns or y > location.rows:
         raise HTTPException(status_code=422, detail="Target out of bounds")
 
-    # Move or swap
+	# Move or swap
     occupant = crud.get_game_at(db, location_id=location.id, x=x, y=y)
     original_x, original_y = game.x, game.y
+
+	# If target cell is the same, do nothing
+    if original_x == x and original_y == y:
+        return JSONResponse({"unchanged": True})
 
     if occupant and occupant.id != game.id:
         crud.swap_game_positions(db, game_a=game, game_b=occupant)
         return JSONResponse({
-            "moved": {"id": game.id, "x": x, "y": y},
-            "swapped": {"id": occupant.id, "x": original_x, "y": original_y}
-        })
+			"moved": {"id": game.id, "x": x, "y": y},
+			"swapped": {"id": occupant.id, "x": original_x, "y": original_y}
+		})
 
-    # Otherwise just move
+	# Otherwise just move
     crud.update_game_position(db, game=game, x=x, y=y)
     return JSONResponse({
-        "moved": {"id": game.id, "x": x, "y": y}
-    })
+		"moved": {"id": game.id, "x": x, "y": y}
+	})
+
 
 @app.post("/login")
 def login(pin: str = Form(...), request: Request = None, db: Session = Depends(get_db)):
@@ -653,13 +660,79 @@ def save_new_game(
     icon_upload: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
+    # AuthZ
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
         return HTMLResponse("<p>Unauthorized</p>", status_code=403)
 
+    # Normalize optional fields (treat empty strings as None)
+    def _clean(v):
+        if v is None:
+            return None
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+    location_id = _clean(location_id)
+    x = int(x) if _clean(x) is not None else None
+    y = int(y) if _clean(y) is not None else None
+    poc_name = _clean(poc_name)
+    poc_email = _clean(poc_email)
+    poc_phone = _clean(poc_phone)
+
+    # Optional: validate x/y within grid bounds if provided together with a valid location
+    if location_id is not None and x is not None and y is not None:
+        loc = crud.get_location_by_id(db, int(location_id))
+        if not loc:
+            return templates.TemplateResponse("game_add_modal.html", {
+                "request": request,
+                "categories": db.query(models.Category).order_by(models.Category.name).all(),
+                "locations": crud.get_locations(db),
+                "error": "Selected location not found."
+            }, status_code=200)
+        if x < 1 or y < 1 or x > loc.columns or y > loc.rows:
+            return templates.TemplateResponse("game_add_modal.html", {
+                "request": request,
+                "categories": db.query(models.Category).order_by(models.Category.name).all(),
+                "locations": crud.get_locations(db),
+                "error": f"Coordinates ({x},{y}) are out of bounds for '{loc.name}'."
+            }, status_code=200)
+
+    # Handle optional icon upload
     icon_filename = None
     if icon_upload and icon_upload.filename:
-        save_path = Path
+        save_path = Path("app/static/images") / icon_upload.filename
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(icon_upload.file, buffer)
+        icon_filename = icon_upload.filename
+
+    # Create the game (status defaults to working in CRUD)
+    new_game = crud.create_game(
+        db=db,
+        name=name,
+        category_id=int(category_id),
+        location_id=int(location_id) if location_id is not None else None,
+        x=x,
+        y=y,
+        poc_name=poc_name,
+        poc_email=poc_email,
+        poc_phone=poc_phone,
+        icon=icon_filename
+    )
+
+    # Notify frontend via HX-Trigger (settings modal will reopen on Games tab per your listeners)
+    trigger_data = {
+        "game_saved": {
+            "message": f"Game '{new_game.name}' has been created.",
+            "id": new_game.id,
+            "name": new_game.name,
+            "icon": new_game.icon,
+            "x": new_game.x,
+            "y": new_game.y
+        }
+    }
+    return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
 
 @app.get("/settings/games/{game_id}/edit", response_class=HTMLResponse)
 def edit_game_modal(request: Request, game_id: int, db: Session = Depends(get_db)):
