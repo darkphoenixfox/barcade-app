@@ -34,10 +34,14 @@
            class="absolute text-center game-tile"
            data-game-id="{{ game.id }}"
            data-x="{{ game.x }}" data-y="{{ game.y }}"
-           style="left: {{ (game.x - 1) * selected_location.cell_size }}px;
-                  top: {{ (game.y - 1) * selected_location.cell_size }}px;
-                  width: {{ selected_location.cell_size }}px;
-                  height: {{ selected_location.cell_size }}px;">
+
+          {% set gx = game.x or 1 %}
+          {% set gy = game.y or 1 %}  
+
+           style="left: {{ (gx - 1) * selected_location.cell_size }}px;
+              top:  {{ (gy - 1) * selected_location.cell_size }}px;
+              width: {{ selected_location.cell_size }}px;
+              height: {{ selected_location.cell_size }}px;">
 
         <div class="h-full flex flex-col justify-center items-center cursor-move p-1"
              hx-get="/game/{{ game.id }}/modal"
@@ -75,8 +79,6 @@
   {% endif %}
 
 </div>
-
-<div id="modal-container"></div>
 
 <style>
   .game-tile.dragging {
@@ -245,5 +247,10 @@ document.body.addEventListener('game_saved', (e) => {
   }
 });
 </script>
+
+{% if first_run %}
+  <div hx-get="/setup/first-run" hx-target="#modal-container" hx-trigger="load"></div>
+{% endif %}
+
 
 {% endblock %}

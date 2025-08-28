@@ -1,8 +1,9 @@
 # app/crud.py
 from sqlalchemy.orm import Session
-from . import models
-from .models import GameStatus, LogEntry, RevenueEntry, Location, Game, User, UserRole
+from app import models                              # 🔽 absolute
+from app.models import GameStatus, LogEntry, RevenueEntry, Location, Game, User, UserRole
 from typing import Optional
+
 
 # ----------- USERS -----------
 

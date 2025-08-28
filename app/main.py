@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI, Request, Depends, Form, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -10,13 +10,12 @@ from typing import Optional
 from pydantic import BaseModel
 import shutil
 from pathlib import Path
-from . import database, models, crud
-from .utils import install_template_filters
-from .models import Game, LogEntry, RevenueEntry, UserRole
-from .database import engine, SessionLocal
-from .models import Base
-from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta, timezone
+
+from app import database, models, crud
+from app.models import Game, LogEntry, RevenueEntry, UserRole, Base
+from app.database import engine, SessionLocal
+from app.utils import install_template_filters
 
 
 class LocationUpdateForm(BaseModel):
@@ -179,18 +178,29 @@ def location_selector(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
-	user = get_current_user(request, db)
-	location_id = get_selected_location(request)
+    user = get_current_user(request, db)
+    location_id = get_selected_location(request)
 
-	locations = crud.get_locations(db)
-	if not location_id and locations:
-		location_id = locations[0].id
-		request.session["location_id"] = location_id
+    if not crud.get_users(db):  # no users in DB
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request,
+            "user": None,
+            "role": None,
+            "locations": [],
+            "selected_location": None,
+            "games": [],
+            "first_run": True  # flag for wizard launcher
+        })
 
-	selected_location = crud.get_location_by_id(db, location_id) if location_id else None
-	games = crud.get_games_by_location(db, location_id) if location_id else []
+    locations = crud.get_locations(db)
+    if not location_id and locations:
+        location_id = locations[0].id
+        request.session["location_id"] = location_id
 
-	return templates.TemplateResponse("dashboard.html", {
+    selected_location = crud.get_location_by_id(db, location_id) if location_id else None
+    games = crud.get_games_by_location(db, location_id) if location_id else []
+
+    return templates.TemplateResponse("dashboard.html", {
 		"request": request,
 		"user": user,
 		"role": user.role.value if user else None,
@@ -943,6 +953,37 @@ def settings_games(request: Request, db: Session = Depends(get_db)):
 		"user": user,
 		"games": games
 	})
+ 
+@app.delete("/settings/games/{game_id}/delete", response_class=HTMLResponse)
+def delete_game(game_id: int, request: Request, db: Session = Depends(get_db)):
+    # AuthZ: only admins
+    user = get_current_user(request, db)
+    if not user or user.role != models.UserRole.admin:
+        return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+    game = crud.get_game_by_id(db, game_id)
+    if not game:
+        return HTMLResponse("<p>Game not found</p>", status_code=404)
+
+    name = game.name
+
+    # Remove dependent rows first to avoid FK issues
+    db.query(models.LogEntry).filter(models.LogEntry.game_id == game_id).delete(synchronize_session=False)
+    db.query(models.RevenueEntry).filter(models.RevenueEntry.game_id == game_id).delete(synchronize_session=False)
+    db.commit()
+
+    # Delete the game
+    db.delete(game)
+    db.commit()
+
+    # Return refreshed Games tab and toast
+    resp = settings_games(request, db=db)  # reuses your existing tab renderer
+    resp.headers["HX-Trigger"] = json.dumps({
+        "settings_saved": {"message": f"Game '{name}' deleted."},
+        "refresh_grid": True
+    })
+    return resp
+
 
 @app.get("/settings/users", response_class=HTMLResponse)
 def settings_users(request: Request, db: Session = Depends(get_db)):
@@ -1235,3 +1276,102 @@ def save_game_changes(
 	}
 	return Response(content="", status_code=200,
 				headers={"HX-Trigger": json.dumps(trigger_data)})
+ 
+ # --- First-run Setup Wizard ---
+
+@app.get("/setup/first-run", response_class=HTMLResponse)
+def setup_first_run(request: Request):
+    return templates.TemplateResponse("setup/first_run_modal.html", {
+        "request": request
+    })
+
+@app.post("/setup/first-run/admin", response_class=HTMLResponse)
+def setup_create_admin(
+    request: Request,
+    name: str = Form(...),
+    pin: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    if crud.get_users(db):  # prevent rerun
+        return HTMLResponse("Already initialized", status_code=400)
+
+    new_user = crud.create_user(db, name=name, pin=pin, role=models.UserRole.admin)
+
+    # auto-login the admin
+    request.session["pin"] = pin
+    request.session["user_id"] = str(new_user.id)
+    request.session["name"] = new_user.name
+    request.session["role"] = new_user.role.value
+    request.session["is_manager"] = True
+    request.session["logged_in"] = True
+
+    # move to next step (location)
+    return templates.TemplateResponse("setup/step_location.html", {"request": request})
+
+@app.post("/setup/first-run/location", response_class=HTMLResponse)
+def setup_create_location(
+    request: Request,
+    name: str = Form(...),
+    rows: int = Form(...),
+    columns: int = Form(...),
+    cell_size: int = Form(...),
+    token_value: float = Form(...),
+    db: Session = Depends(get_db)
+):
+    crud.create_location(db, name, rows, columns, cell_size, token_value)
+    return templates.TemplateResponse("setup/step_category.html", {"request": request})
+
+@app.post("/setup/first-run/category", response_class=HTMLResponse)
+def setup_create_category(
+    request: Request,
+    name: str = Form(...),
+    icon: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    crud.create_category(db, name, icon)
+    return templates.TemplateResponse("setup/step_game.html", {
+        "request": request,
+        "categories": crud.get_categories(db),
+        "locations": crud.get_locations(db)
+    })
+
+@app.post("/setup/first-run/game", response_class=HTMLResponse)
+def setup_create_game(
+    request: Request,
+    name: str = Form(...),
+    category_id: int = Form(...),
+    location_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db)
+):
+    # Normalize location_id
+    loc_id: Optional[int] = None
+    if location_id is not None and str(location_id).strip() != "":
+        try:
+            loc_id = int(location_id)
+        except ValueError:
+            loc_id = None
+
+    # If a location is selected, default new game to (1,1)
+    default_x = 1 if loc_id is not None else None
+    default_y = 1 if loc_id is not None else None
+
+    crud.create_game(
+        db=db,
+        name=name,
+        category_id=int(category_id),
+        location_id=loc_id,
+        x=default_x,
+        y=default_y,
+        poc_name=None,
+        poc_email=None,
+        poc_phone=None,
+        icon=None
+    )
+
+    # Tell HTMX to perform a FULL PAGE redirect (do not swap HTML into modal)
+    resp = Response(content="", status_code=204)  # no body
+    resp.headers["HX-Redirect"] = "/"
+    # (Optional) also trigger modal close just in case
+    resp.headers["HX-Trigger"] = json.dumps({"close_modal": True})
+    return resp
+

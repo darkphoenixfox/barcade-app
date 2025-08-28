@@ -1,0 +1,49 @@
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+     onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
+  <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+
+    <h2 class="text-xl font-bold mb-4">Step 4: Add your first game</h2>
+
+    <form
+      hx-post="/setup/first-run/game"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      class="space-y-4">
+
+      <div>
+        <label for="name" class="block text-sm font-medium">Game Name</label>
+        <input type="text" name="name" id="name" placeholder="e.g., Pac-Man" required
+               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="category_id" class="block text-sm font-medium">Category</label>
+          <select name="category_id" id="category_id" required
+                  class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+            {% for category in categories %}
+              <option value="{{ category.id }}">{{ category.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="location_id" class="block text-sm font-medium">Location</label>
+          <select name="location_id" id="location_id"
+                  class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+            <option value="">-- Unassigned --</option>
+            {% for location in locations %}
+              <option value="{{ location.id }}">{{ location.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-4 pt-4">
+        <button type="submit"
+                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+          Finish
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

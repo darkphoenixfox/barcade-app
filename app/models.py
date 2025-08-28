@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Enum, DateTime, Float, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from .database import Base
+from app.database import Base  # 🔽 absolute
 import enum
 
 class UserRole(str, enum.Enum):
