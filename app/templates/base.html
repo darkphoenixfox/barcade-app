@@ -186,6 +186,12 @@
 			showToast(msg);
 		});
 
+		//HTMX custom event handler for revenue logging
+		document.addEventListener('revenue_logged', function (e) {
+			const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Revenue logged';
+			if (window.showToast) showToast(msg);
+  		});
+
 
 		// Script to run on page load to check session storage
 		document.body.addEventListener('htmx:load', () => {
@@ -223,8 +229,6 @@
 			}
 		});
 
-	</script>
-	<script>
 	// Close modal on HX-Trigger "close_modal"
 	document.addEventListener('close_modal', function () {
 		const mc = document.getElementById('modal-container');

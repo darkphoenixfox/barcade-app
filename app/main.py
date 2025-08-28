@@ -402,8 +402,19 @@ def log_revenue(
         collected_at=parsed_ts
     )
 
-    # Back to dashboard (your UI flow expects a redirect)
-    return RedirectResponse(url="/", status_code=303)
+    # Re-fetch fresh game (to reflect any changes if you later add derived fields)
+    game = crud.get_game_by_id(db, game_id)
+
+    resp = templates.TemplateResponse("game_modal.html", {
+        "request": request,
+        "user": user,
+        "game": crud.get_game_by_id(db, game_id),
+    })
+    resp.headers["HX-Trigger"] = json.dumps({
+        "revenue_logged": {"message": "Revenue logged"}
+    })
+    return resp
+
 
 
 @app.get("/game/{game_id}/status-history", response_class=HTMLResponse)
@@ -428,6 +439,114 @@ def status_history(request: Request, game_id: int, db: Session = Depends(get_db)
 		"game": game,
 		"entries": status_entries,
 	})
+
+def _floor_day(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+@app.get("/game/{game_id}/status-series")
+def status_series_api(
+    game_id: int,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    now = datetime.now(timezone.utc)
+    end_dt = datetime.fromisoformat(end).astimezone(timezone.utc) if end else now
+    start_dt = datetime.fromisoformat(start).astimezone(timezone.utc) if start else (end_dt - timedelta(days=30))
+    if start_dt >= end_dt:
+        return {"daily": [], "totals": {"uptime_hours": 0.0, "downtime_hours": 0.0}}
+
+    # Get all logs plus the last one before start to know starting status
+    q = (db.query(LogEntry)
+           .filter(LogEntry.game_id == game_id)
+           .order_by(LogEntry.timestamp.asc()))
+    logs = q.all()
+
+    # Find previous status before window
+    prev = None
+    for e in logs:
+        if e.timestamp and e.timestamp.tzinfo is None:
+            e.timestamp = e.timestamp.replace(tzinfo=timezone.utc)
+    for e in logs:
+        if e.timestamp < start_dt:
+            prev = e
+        else:
+            break
+
+    # Determine status at start
+    current_status = prev.action if prev else "working"  # default to working if no history
+
+    # Seed per-day buckets
+    day = _floor_day(start_dt)
+    days = {}
+    while day < end_dt:
+        days[day] = 0.0  # downtime seconds per day
+        day += timedelta(days=1)
+
+    # Walk segments across the window
+    cursor = start_dt
+    for e in [x for x in logs if start_dt <= x.timestamp <= end_dt]:
+        seg_start = cursor
+        seg_end = e.timestamp
+        if seg_end > seg_start and current_status == "out_of_order":
+            # Accumulate downtime into day buckets
+            d = _floor_day(seg_start)
+            while d < seg_end:
+                day_start = max(seg_start, d)
+                day_end = min(seg_end, d + timedelta(days=1))
+                days[_floor_day(d)] += (day_end - day_start).total_seconds()
+                d += timedelta(days=1)
+        # Move status forward
+        cursor = seg_end
+        current_status = e.action
+
+    # Tail segment to end_dt
+    if cursor < end_dt and current_status == "out_of_order":
+        d = _floor_day(cursor)
+        while d < end_dt:
+            day_start = max(cursor, d)
+            day_end = min(end_dt, d + timedelta(days=1))
+            days[_floor_day(d)] += (day_end - day_start).total_seconds()
+            d += timedelta(days=1)
+
+    # Build outputs
+    daily = []
+    for k in sorted(days.keys()):
+        day_start = k
+        day_end = min(k + timedelta(days=1), end_dt)
+
+        # Window overlap for this day (handles first/last partial days)
+        window_start = max(day_start, start_dt)
+        window_end = min(day_end, end_dt)
+        window_seconds = max((window_end - window_start).total_seconds(), 0.0)
+
+        down_sec = days[k]
+        up_sec = max(window_seconds - down_sec, 0.0)
+
+        daily.append({
+            "t": k.isoformat(),
+            "uptime_hours": round(up_sec / 3600.0, 2),
+            "downtime_hours": round(down_sec / 3600.0, 2),
+        })
+
+    total_seconds = (end_dt - start_dt).total_seconds()
+    downtime_seconds = sum(v for v in days.values())
+    uptime_seconds = max(total_seconds - downtime_seconds, 0.0)
+
+    return {
+        "daily": daily,
+        "totals": {
+            "uptime_hours": round(uptime_seconds / 3600.0, 2),
+            "downtime_hours": round(downtime_seconds / 3600.0, 2),
+        }
+    }
+
 
 @app.get("/game/{game_id}/revenue-history", response_class=HTMLResponse)
 def revenue_history(request: Request, game_id: int, db: Session = Depends(get_db)):

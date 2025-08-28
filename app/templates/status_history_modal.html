@@ -1,37 +1,170 @@
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-     onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
-	<div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-md w-full p-6 relative space-y-6">
-		<button class="absolute top-2 right-3 text-gray-500 hover:text-white text-xl"
-		        onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
+<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" id="status-modal">
+  <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg w-full max-w-3xl relative">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div>
+        <h2 class="text-lg font-semibold leading-tight">{{ game.name }}</h2>
+        <p class="text-xs text-gray-600 dark:text-gray-400">Status history</p>
+      </div>
+      <button class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 text-xl"
+              onclick="document.dispatchEvent(new Event('close_modal'))">&times;</button>
+    </div>
 
-		<h2 class="text-xl font-bold">{{ game.name }}</h2>
-		<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase">Status History</h3>
+    <!-- Body -->
+    <div class="px-4 py-4 space-y-4">
+      <!-- Controls -->
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="text-sm">Range:</label>
+        <select id="stat-range" class="px-2 py-1 rounded bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+        </select>
 
-		<div class="max-h-80 overflow-y-auto space-y-4 pr-1">
-			{% for entry in entries %}
-				<div class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white/60 dark:bg-gray-800/60">
-					<span class="text-xs font-semibold px-2 py-0.5 rounded-full mr-2
-						{% if entry.action == 'out_of_order' %}
-							bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200
-						{% elif entry.action == 'needs_maintenance' %}
-							bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200
-						{% elif entry.action == 'working' %}
-							bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200
-						{% else %}
-							bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200
-						{% endif %}">
-						{{ entry.action.replace('_', ' ') | title }}
-					</span>
-					<span class="text-xs text-gray-700 dark:text-gray-300">
-						by {{ entry.user.name }} &bull; {{ entry.timestamp.strftime("%Y-%m-%d %H:%M") }}
-					</span>
-					{% if entry.comments %}
-						<p class="text-sm mt-1 text-gray-800 dark:text-gray-200">{{ entry.comments }}</p>
-					{% endif %}
-				</div>
-			{% else %}
-				<p class="text-sm text-gray-600 dark:text-gray-400 italic">No status history available.</p>
-			{% endfor %}
-		</div>
-	</div>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="text-sm">Chart:</span>
+          <button id="btn-bar" class="px-2 py-1 rounded bg-blue-600 text-white text-sm">Bar</button>
+          <button id="btn-pie" class="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-sm">Pie</button>
+        </div>
+      </div>
+
+      <!-- Chart area: tall for readability -->
+      <div class="w-full h-96">
+        <canvas id="stat-chart"></canvas>
+      </div>
+
+      <!-- Recent entries (latest 15) -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold">Recent entries</h3>
+          <span class="text-xs text-gray-500 dark:text-gray-400">Showing latest 15</span>
+        </div>
+
+        <div class="max-h-56 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+              <tr>
+                <th class="text-left px-3 py-2">Timestamp</th>
+                <th class="text-left px-3 py-2">Action</th>
+                <th class="text-left px-3 py-2">Comments</th>
+                <th class="text-left px-3 py-2">User</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set recent = ((entries or []) | sort(attribute='timestamp') | reverse | list) %}
+              {% for entry in recent[:15] %}
+              <tr class="border-t border-gray-100 dark:border-gray-800">
+                <td class="px-3 py-2 whitespace-nowrap">{{ entry.timestamp.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td class="px-3 py-2 whitespace-nowrap">{{ entry.action.replace('_', ' ') | title }}</td>
+                <td class="px-3 py-2">{{ entry.comments or '-' }}</td>
+                <td class="px-3 py-2 whitespace-nowrap">{{ entry.user.name if entry.user else '-' }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="px-3 py-3 text-gray-500 dark:text-gray-400 italic">No status history available.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-right">
+      <button class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
+              onclick="document.dispatchEvent(new Event('close_modal'))">Close</button>
+    </div>
+  </div>
 </div>
+
+<script>
+(function () {
+  const gameId = {{ game.id }};
+  const ctx = document.getElementById('stat-chart');
+  let chart, mode = 'bar';
+
+  function makeBar(points) {
+    const labels = points.map(p => new Date(p.t).toLocaleDateString());
+    const upData = points.map(p => p.uptime_hours || 0);
+    const downData = points.map(p => p.downtime_hours || 0);
+
+    return {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Uptime (hours)',   data: upData,   stack: 'time' },
+          { label: 'Downtime (hours)', data: downData, stack: 'time' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { stacked: true, ticks: { maxRotation: 0 } },
+          y: { stacked: true, beginAtZero: true, min: 0 }
+        }
+      }
+    };
+  }
+
+  function makePie(totals) {
+    const up = totals.uptime_hours || 0;
+    const down = totals.downtime_hours || 0;
+    return {
+      type: 'pie',
+      data: {
+        labels: ['Uptime (hrs)', 'Downtime (hrs)'],
+        datasets: [{
+          data: [up, down]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    };
+  }
+
+  async function reload() {
+    const days = parseInt(document.getElementById('stat-range').value, 10);
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 86400 * 1000);
+    const qs = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() }).toString();
+
+    const res = await fetch(`/game/${gameId}/status-series?` + qs);
+    if (!res.ok) {
+      if (window.showToast) showToast('Error loading status series');
+      return;
+    }
+    const json = await res.json();
+
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, mode === 'bar' ? makeBar(json.daily) : makePie(json.totals));
+  }
+
+  // Controls
+  document.getElementById('stat-range').addEventListener('change', reload);
+  document.getElementById('btn-bar').addEventListener('click', () => {
+    mode = 'bar';
+    document.getElementById('btn-bar').className = 'px-2 py-1 rounded bg-blue-600 text-white text-sm';
+    document.getElementById('btn-pie').className = 'px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-sm';
+    reload();
+  });
+  document.getElementById('btn-pie').addEventListener('click', () => {
+    mode = 'pie';
+    document.getElementById('btn-pie').className = 'px-2 py-1 rounded bg-blue-600 text-white text-sm';
+    document.getElementById('btn-bar').className = 'px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-sm';
+    reload();
+  });
+
+  // Initial render
+  reload();
+})();
+</script>

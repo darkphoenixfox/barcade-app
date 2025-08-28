@@ -63,7 +63,11 @@
 
 		<div>
 			<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase mb-2">Log Revenue</h3>
-			<form method="post" action="/game/{{ game.id }}/log-revenue" class="space-y-2">
+			<form
+				hx-post="/game/{{ game.id }}/log-revenue"
+				hx-target="#modal-container"
+				hx-swap="innerHTML"
+				class="space-y-2">
 				<input type="hidden" name="user_id" value="{{ user.id }}">
 				<input type="number" step="0.01" name="amount" placeholder="Amount" required
 				       class="w-full border px-2 py-1 rounded dark:bg-gray-800 dark:border-gray-700">

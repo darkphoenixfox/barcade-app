@@ -1,54 +1,65 @@
-<div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4" id="revenue-modal">
-  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl overflow-hidden">
+<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" id="revenue-modal">
+  <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg w-full max-w-3xl relative">
+    <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-      <h2 class="text-lg font-semibold">Revenue history — {{ game.name }}</h2>
-      <button class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-              onclick="document.dispatchEvent(new Event('close_modal'))">
-        ✕
-      </button>
+      <div>
+        <h2 class="text-lg font-semibold leading-tight">{{ game.name }}</h2>
+        <p class="text-xs text-gray-600 dark:text-gray-400">Revenue history</p>
+      </div>
+      <button class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 text-xl"
+              onclick="document.dispatchEvent(new Event('close_modal'))">&times;</button>
     </div>
 
-    <div class="px-4 py-3 space-y-3">
+    <!-- Body -->
+    <div class="px-4 py-4 space-y-4">
       <!-- Controls -->
-		<div class="flex flex-wrap items-center gap-3">
-		<label class="text-sm">Range:</label>
-		<select id="rev-range" class="px-2 py-1 rounded bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm">
-			<option value="7">Last 7 days</option>
-			<option value="30" selected>Last 30 days</option>
-			<option value="90">Last 90 days</option>
-			<option value="180">Last 6 months</option>
-			<option value="365">Last year</option>
-		</select>
-		</div>
-
-
-      <!-- Chart -->
-      <div class="w-full">
-        <canvas id="rev-chart" height="140"></canvas>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="text-sm">Range:</label>
+        <select id="rev-range" class="px-2 py-1 rounded bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+        </select>
       </div>
 
-      <!-- Raw entries table -->
-      <div class="border-t border-gray-200 dark:border-gray-700 pt-3">
-        <h3 class="text-sm font-semibold mb-2">Entries</h3>
-        <div class="max-h-64 overflow-auto">
+      <!-- Chart area -->
+      <div class="w-full h-96"> <!-- taller chart (24rem) -->
+        <canvas id="rev-chart"></canvas>
+      </div>
+
+      <!-- Recent entries -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold">Recent entries</h3>
+          <span class="text-xs text-gray-500 dark:text-gray-400">Showing latest 15</span>
+        </div>
+
+        <div class="max-h-56 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
           <table class="w-full text-sm">
-            <thead class="text-left text-gray-500 dark:text-gray-400">
-              <tr>
-                <th class="py-1 pr-2">Timestamp</th>
-                <th class="py-1 pr-2">Logged amount</th>
-                <th class="py-1 pr-2">Type</th>
-                <th class="py-1">User</th>
-              </tr>
-            </thead>
+          <thead class="text-left text-gray-500 dark:text-gray-400">
+            <tr>
+              <th class="py-1 pr-2">Timestamp</th>
+              <th class="py-1 pr-2">Amount (€)</th>
+              <th class="py-1 pr-2">Tokens</th>
+              <th class="py-1">User</th>
+            </tr>
+          </thead>
             <tbody>
-              {% for e in entries %}
+              {% set recent = ((entries or []) | sort(attribute='timestamp') | reverse | list) %}
+              {% set tv = (game.location.token_value if game.location else 1.0) %}
+              {% for e in recent[:15] %}
+              {% set cash = (e.amount * tv) if e.is_token else e.amount %}
               <tr class="border-t border-gray-100 dark:border-gray-800">
-                <td class="py-1 pr-2">{{ e.timestamp }}</td>
-                <td class="py-1 pr-2">
-                  {% if e.is_token %}{{ e.amount }} token(s){% else %}€{{ '%.2f' % e.amount }}{% endif %}
-                </td>
-                <td class="py-1 pr-2">{{ 'Tokens' if e.is_token else 'Cash' }}</td>
-                <td class="py-1">{{ e.user.name if e.user else '-' }}</td>
+                <td class="py-1 pr-2 whitespace-nowrap">{{ e.timestamp.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td class="py-1 pr-2 whitespace-nowrap">€{{ '%.2f' % cash }}</td>
+                <td class="py-1 pr-2 whitespace-nowrap">{% if e.is_token %}&#10003;{% endif %}</td>
+                <td class="py-1 whitespace-nowrap">{{ e.user.name if e.user else '-' }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="px-3 py-3 text-gray-500 dark:text-gray-400 italic">No revenue history available.</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -57,6 +68,7 @@
       </div>
     </div>
 
+    <!-- Footer -->
     <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-right">
       <button class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
               onclick="document.dispatchEvent(new Event('close_modal'))">Close</button>
@@ -65,17 +77,16 @@
 </div>
 
 <script>
-(function() {
+(function () {
   const gameId = {{ game.id }};
   const ctx = document.getElementById('rev-chart');
   let chart;
 
   function fmtEUR(x) { return '€' + (Math.round(x * 100) / 100).toFixed(2); }
 
-  function makeChart(points) {
-    // points: [{t, amount}]
+  function render(points) {
     const labels = points.map(p => new Date(p.t).toLocaleString());
-    const data = points.map(p => p.amount);
+    const data   = points.map(p => p.amount);
 
     if (chart) chart.destroy();
     chart = new Chart(ctx, {
@@ -87,12 +98,12 @@
           data,
           tension: 0.25,
           pointRadius: 3,
-          spanGaps: false    // do NOT bridge missing entries; only actual points
+          spanGaps: false
         }]
       },
       options: {
         responsive: true,
-        maintainAspectRatio: false,
+        maintainAspectRatio: false,  // respects h-96
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
@@ -104,7 +115,11 @@
         },
         scales: {
           x: { ticks: { maxRotation: 0 } },
-          y: { ticks: { callback: (v) => fmtEUR(v) } }
+          y: {
+            min: 0,            // always start at zero
+            beginAtZero: true,
+            ticks: { callback: (v) => fmtEUR(v) }
+          }
         }
       }
     });
@@ -126,13 +141,10 @@
       return;
     }
     const json = await res.json();
-    makeChart(json.series || []);
+    render(json.series || []);
   }
 
   document.getElementById('rev-range').addEventListener('change', reload);
-
-  // First render
   reload();
 })();
 </script>
-
