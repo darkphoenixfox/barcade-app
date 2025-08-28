@@ -39,7 +39,7 @@ def delete_user(db: Session, user_to_delete: User):
 # ----------- LOCATIONS -----------
 
 def get_locations(db: Session):
-	return db.query(models.Location).all()
+    return db.query(models.Location).order_by(models.Location.name).all()
 
 def get_location_by_id(db: Session, location_id: int):
 	return db.query(models.Location).filter(models.Location.id == location_id).first()
@@ -70,10 +70,34 @@ def get_categories(db: Session):
 # ----------- GAMES -----------
 
 def get_games_by_location(db: Session, location_id: int):
-	return db.query(models.Game).filter(models.Game.location_id == location_id).all()
+    return db.query(models.Game).filter(models.Game.location_id == location_id).all()
 
 def get_game_by_id(db: Session, game_id: int):
-	return db.query(models.Game).filter(models.Game.id == game_id).first()
+    return db.query(models.Game).filter(models.Game.id == game_id).first()
+
+def get_game_at(db: Session, location_id: int, x: int, y: int):
+    return (db.query(models.Game)
+              .filter(models.Game.location_id == location_id,
+                      models.Game.x == x,
+                      models.Game.y == y)
+              .first())
+
+def update_game_position(db: Session, game: models.Game, x: int, y: int):
+    game.x = x
+    game.y = y
+    db.commit()
+    db.refresh(game)
+    return game
+
+def swap_game_positions(db: Session, game_a: models.Game, game_b: models.Game):
+    ax, ay = game_a.x, game_a.y
+    bx, by = game_b.x, game_b.y
+    game_a.x, game_a.y = bx, by
+    game_b.x, game_b.y = ax, ay
+    db.commit()
+    db.refresh(game_a)
+    db.refresh(game_b)
+    return game_a, game_b
 
 def get_all_games(db: Session):
 	return db.query(models.Game).order_by(models.Game.name).all()

@@ -4,51 +4,65 @@
 <div class="flex flex-col items-center w-full gap-6">
 
   {% if selected_location %}
-  <div class="relative inline-block border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/50 shadow-lg overflow-hidden"
+  <div id="grid"
+       class="relative inline-block border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/50 shadow-lg overflow-hidden"
+       data-cell-size="{{ selected_location.cell_size }}"
+       data-rows="{{ selected_location.rows }}"
+       data-columns="{{ selected_location.columns }}"
+       data-location-id="{{ selected_location.id }}"
        style="width: {{ selected_location.columns * selected_location.cell_size }}px;
-              height: {{ selected_location.rows * selected_location.cell_size }}px;">
+              height: {{ selected_location.rows * selected_location.cell_size }}px;
+              background-image:
+                repeating-linear-gradient(
+                  0deg,
+                  transparent,
+                  transparent {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.08) {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.08) {{ selected_location.cell_size }}px
+                ),
+                repeating-linear-gradient(
+                  90deg,
+                  transparent,
+                  transparent {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.08) {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.08) {{ selected_location.cell_size }}px
+                );">
 
-    {# Draw the grid lines #}
-    {% for y in range(selected_location.rows) %}
-      {% for x in range(selected_location.columns) %}
-        <div class="absolute border-r border-b border-gray-200 dark:border-gray-700"
-             style="left: {{ x * selected_location.cell_size }}px;
-                    top: {{ y * selected_location.cell_size }}px;
-                    width: {{ selected_location.cell_size }}px;
-                    height: {{ selected_location.cell_size }}px;">
-        </div>
-      {% endfor %}
-    {% endfor %}
-
-    {# Place the games #}
+    {# Render the games as draggable tiles #}
     {% for game in games %}
-      <div class="absolute text-center"
+      <div id="game-{{ game.id }}"
+           class="absolute text-center game-tile"
+           data-game-id="{{ game.id }}"
+           data-x="{{ game.x }}" data-y="{{ game.y }}"
            style="left: {{ (game.x - 1) * selected_location.cell_size }}px;
                   top: {{ (game.y - 1) * selected_location.cell_size }}px;
                   width: {{ selected_location.cell_size }}px;
                   height: {{ selected_location.cell_size }}px;">
-        <div class="h-full flex flex-col justify-center items-center cursor-pointer p-1"
+
+        <div class="h-full flex flex-col justify-center items-center cursor-move p-1"
              hx-get="/game/{{ game.id }}/modal"
              hx-target="#modal-container"
-             hx-trigger="click"
+             hx-trigger="dblclick"
              hx-swap="innerHTML">
 
           <img
             src="{{ '/static/images/' ~ game.icon if game.icon else '/static/default.png' }}"
             style="max-width: {{ selected_location.cell_size / 2 }}px; max-height: {{ selected_location.cell_size / 2 }}px;"
             class="mb-1 object-contain"
-            alt="{{ game.name }}">
+            alt="{{ game.name }}"
+            draggable="false">
 
           <span class="text-xs font-semibold block text-center px-2 py-0.5 rounded-full
-                bg-white/80 dark:bg-gray-900/80 text-black dark:text-white shadow-sm">
+                bg-white/80 dark:bg-gray-900/80 text-black dark:text-white shadow-sm"
+                draggable="false">
             {{ game.name }}
           </span>
 
           <span class="mt-1 text-xs font-medium block text-center px-2 py-0.5 rounded-full shadow-sm
-                {{ status_classes(game.status) }}">
+                {{ status_classes(game.status) }}"
+                draggable="false">
             {{ game.status.value.replace('_', ' ') | title }}
           </span>
-
         </div>
       </div>
     {% endfor %}
@@ -63,5 +77,153 @@
 </div>
 
 <div id="modal-container"></div>
+
+<style>
+  .game-tile.dragging {
+    opacity: 0.7;
+    z-index: 50;
+    cursor: grabbing;
+  }
+</style>
+
+<script>
+(function () {
+  const grid = document.getElementById('grid');
+  if (!grid) return;
+
+  const cellSize = parseInt(grid.dataset.cellSize, 10);
+  const rows     = parseInt(grid.dataset.rows, 10);
+  const cols     = parseInt(grid.dataset.columns, 10);
+
+  let draggingTile = null;
+  let startMouseX = 0, startMouseY = 0;
+  let startLeft = 0, startTop = 0;
+
+  // START drag on mousedown of a tile
+  document.addEventListener('mousedown', (e) => {
+    const tile = e.target.closest('.game-tile');
+    if (!tile || !grid.contains(tile)) return;
+
+    e.preventDefault();
+    draggingTile = tile;
+    draggingTile.classList.add('dragging');
+
+    startMouseX = e.clientX;
+    startMouseY = e.clientY;
+    startLeft = parseFloat(tile.style.left || 0);
+    startTop  = parseFloat(tile.style.top || 0);
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp, { once: true });
+  });
+
+  function onMove(e) {
+    if (!draggingTile) return;
+    const dx = e.clientX - startMouseX;
+    const dy = e.clientY - startMouseY;
+    draggingTile.style.left = (startLeft + dx) + 'px';
+    draggingTile.style.top  = (startTop  + dy) + 'px';
+  }
+
+  async function onUp(e) {
+    window.removeEventListener('mousemove', onMove);
+
+    if (!draggingTile) return;
+    const tile = draggingTile;
+    draggingTile = null;
+
+    const gridRect = grid.getBoundingClientRect();
+    let relX = e.clientX - gridRect.left;
+    let relY = e.clientY - gridRect.top;
+
+    let x = Math.floor(relX / cellSize) + 1;
+    let y = Math.floor(relY / cellSize) + 1;
+    x = Math.max(1, Math.min(cols, x));
+    y = Math.max(1, Math.min(rows, y));
+
+    try {
+      const gameId = tile.dataset.gameId;
+      const form = new FormData();
+      form.append('x', x);
+      form.append('y', y);
+
+      const res = await fetch(`/game/${gameId}/move`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const msg = await res.text();
+        if (window.showToast) showToast(msg || 'Move failed');
+        snapToDataXY(tile);
+        tile.classList.remove('dragging');
+        return;
+      }
+
+      const payload = await res.json();
+
+      // Move dragged tile
+      tile.style.left = ((payload.moved.x - 1) * cellSize) + 'px';
+      tile.style.top  = ((payload.moved.y - 1) * cellSize) + 'px';
+      tile.dataset.x = String(payload.moved.x);
+      tile.dataset.y = String(payload.moved.y);
+
+      // If swapped, update the other tile
+      if (payload.swapped) {
+        const swapped = document.getElementById(`game-${payload.swapped.id}`);
+        if (swapped) {
+          swapped.style.left = ((payload.swapped.x - 1) * cellSize) + 'px';
+          swapped.style.top  = ((payload.swapped.y - 1) * cellSize) + 'px';
+          swapped.dataset.x = String(payload.swapped.x);
+          swapped.dataset.y = String(payload.swapped.y);
+        }
+      }
+
+      if (window.showToast) showToast('Position updated');
+    } catch {
+      if (window.showToast) showToast('Network error moving game');
+      snapToDataXY(tile);
+    } finally {
+      tile.classList.remove('dragging');
+    }
+  }
+
+  function snapToDataXY(tile) {
+    const x = parseInt(tile.dataset.x, 10);
+    const y = parseInt(tile.dataset.y, 10);
+    tile.style.left = ((x - 1) * cellSize) + 'px';
+    tile.style.top  = ((y - 1) * cellSize) + 'px';
+  }
+})();
+</script>
+
+<script>
+document.body.addEventListener('game_saved', (e) => {
+  const modal = document.getElementById('modal-container');
+  if (modal) modal.innerHTML = '';
+
+  const d = e.detail || {};
+  const tile = document.getElementById(`game-${d.id}`);
+  if (!tile) return;
+
+  // Update game name
+  const nameSpan = tile.querySelector('span:not(.mt-1)');
+  if (nameSpan && d.name) {
+    nameSpan.textContent = d.name;
+  }
+
+  // Update game icon
+  const img = tile.querySelector('img');
+  if (img && d.icon) {
+    img.src = `/static/images/${d.icon}`;
+  }
+
+  // Update grid position
+  if (d.x && d.y) {
+    const grid = document.getElementById('grid');
+    const cs = parseInt(grid.dataset.cellSize, 10);
+    tile.style.left = ((d.x - 1) * cs) + 'px';
+    tile.style.top  = ((d.y - 1) * cs) + 'px';
+    tile.dataset.x = String(d.x);
+    tile.dataset.y = String(d.y);
+  }
+});
+</script>
 
 {% endblock %}

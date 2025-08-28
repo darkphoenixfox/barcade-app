@@ -10,14 +10,13 @@ from typing import Optional
 from pydantic import BaseModel
 import shutil
 from pathlib import Path
-
-# --- CORRECTED & UNIFIED IMPORTS ---
 from . import database, models, crud
 from .utils import install_template_filters
 from .models import Game, LogEntry, RevenueEntry, UserRole
 from .database import engine, SessionLocal
 from .models import Base
-# --- END CORRECTIONS ---
+from fastapi import FastAPI, Request, Depends, Form, HTTPException
+from fastapi.responses import JSONResponse
 
 
 # Pydantic schema for location form data
@@ -60,6 +59,10 @@ def get_current_user(request: Request, db: Session):
 def get_selected_location(request: Request):
 	return request.session.get("location_id", None)
 
+def require_logged_in(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 # --- Routes ---
 
 @app.get("/location-selector", response_class=HTMLResponse)
@@ -94,6 +97,50 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 		"games": games
 	})
 
+@app.post("/game/{game_id}/move")
+def move_game(
+    game_id: int,
+    request: Request,
+    x: int = Form(...),
+    y: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Require a logged in user (any role)
+    require_logged_in(request)
+
+    # Validate game and get current location context
+    game = crud.get_game_by_id(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    selected_location_id = get_selected_location(request)
+    if game.location_id != selected_location_id:
+        raise HTTPException(status_code=400, detail="Game not in selected location")
+
+    # Validate coordinates within grid bounds
+    location = crud.get_location_by_id(db, selected_location_id)
+    if not location:
+        raise HTTPException(status_code=400, detail="No location selected")
+
+    if x < 1 or y < 1 or x > location.columns or y > location.rows:
+        raise HTTPException(status_code=422, detail="Target out of bounds")
+
+    # Move or swap
+    occupant = crud.get_game_at(db, location_id=location.id, x=x, y=y)
+    original_x, original_y = game.x, game.y
+
+    if occupant and occupant.id != game.id:
+        crud.swap_game_positions(db, game_a=game, game_b=occupant)
+        return JSONResponse({
+            "moved": {"id": game.id, "x": x, "y": y},
+            "swapped": {"id": occupant.id, "x": original_x, "y": original_y}
+        })
+
+    # Otherwise just move
+    crud.update_game_position(db, game=game, x=x, y=y)
+    return JSONResponse({
+        "moved": {"id": game.id, "x": x, "y": y}
+    })
 
 @app.post("/login")
 def login(pin: str = Form(...), request: Request = None, db: Session = Depends(get_db)):
@@ -613,3 +660,76 @@ def save_new_game(
     icon_filename = None
     if icon_upload and icon_upload.filename:
         save_path = Path
+
+@app.get("/settings/games/{game_id}/edit", response_class=HTMLResponse)
+def edit_game_modal(request: Request, game_id: int, db: Session = Depends(get_db)):
+	user = get_current_user(request, db)
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+	game = db.query(models.Game).filter_by(id=game_id).first()
+	if not game:
+		return HTMLResponse("<p>Game not found</p>", status_code=404)
+	
+	categories = db.query(models.Category).order_by(models.Category.name).all()
+	locations = crud.get_locations(db)
+
+	return templates.TemplateResponse("game_edit_modal.html", {
+		"request": request,
+		"user": user,
+		"game": game,
+		"categories": categories,
+		"locations": locations
+	})
+
+@app.post("/settings/games/{game_id}/edit", response_class=HTMLResponse)
+def save_game_changes(
+	request: Request,
+	game_id: int,
+	name: str = Form(...),
+	category_id: int = Form(...),
+	location_id: Optional[int] = Form(None),
+	x: Optional[int] = Form(None),
+	y: Optional[int] = Form(None),
+	poc_name: Optional[str] = Form(None),
+	poc_email: Optional[str] = Form(None),
+	poc_phone: Optional[str] = Form(None),
+    icon_upload: UploadFile = File(None),
+	db: Session = Depends(get_db)
+):
+	user = get_current_user(request, db)
+	if not user or user.role != models.UserRole.admin:
+		return HTMLResponse("<p>Unauthorized</p>", status_code=403)
+
+	game = db.query(models.Game).filter_by(id=game_id).first()
+	if not game:
+		return HTMLResponse("<p>Game not found</p>", status_code=404)
+
+	if icon_upload and icon_upload.filename:
+		save_path = Path("app/static/images") / icon_upload.filename
+		save_path.parent.mkdir(parents=True, exist_ok=True)
+		with save_path.open("wb") as buffer:
+			shutil.copyfileobj(icon_upload.file, buffer)
+		game.icon = icon_upload.filename
+	
+	game.name = name
+	game.category_id = category_id
+	game.location_id = location_id
+	game.x = x
+	game.y = y
+	game.poc_name = poc_name or None
+	game.poc_email = poc_email or None
+	game.poc_phone = poc_phone or None
+	db.commit()
+
+	trigger_data = {
+		"game_saved": {
+			"id": game.id,
+			"name": game.name,
+			"icon": game.icon,
+			"x": game.x,
+			"y": game.y
+		}
+	}
+	return Response(content="", status_code=200,
+				headers={"HX-Trigger": json.dumps(trigger_data)})
