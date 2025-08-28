@@ -163,6 +163,23 @@ def create_game(db: Session, name: str, category_id: int, location_id: Optional[
     db.refresh(db_game)
     return db_game
 
+def update_game(db: Session, game: models.Game, name: str, category_id: int, location_id: Optional[int], x: Optional[int], y: Optional[int], poc_name: Optional[str], poc_email: Optional[str], poc_phone: Optional[str], icon: Optional[str]):
+    game.name = name
+    game.category_id = category_id
+    game.location_id = location_id
+    game.x = x
+    game.y = y
+    game.poc_name = poc_name
+    game.poc_email = poc_email
+    game.poc_phone = poc_phone
+    game.icon = icon
+    db.commit()
+    db.refresh(game)
+    return game
+
+def delete_game(db: Session, game: models.Game):
+    db.delete(game)
+    db.commit()
 
 def update_game_status(db: Session, game: models.Game, status: GameStatus, user_id: int, comment: str = ""):
 	game.status = status
