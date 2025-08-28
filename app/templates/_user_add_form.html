@@ -16,14 +16,15 @@
     <input type="text" name="name" id="name" required value="{{ name or '' }}"
            class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
   </div>
-  
-  <div>
-    <label for="pin" class="block text-sm font-medium">4-digit PIN</label>
-    <input type="password" name="pin" id="pin" required maxlength="4"
-           class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
-  </div>
 
-  <div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label for="pin" class="block text-sm font-medium">4-digit PIN</label>
+      <input type="password" name="pin" id="pin" required maxlength="4" inputmode="numeric" autocomplete="new-password"
+             class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+    </div>
+
+    <div>
       <label for="role" class="block text-sm font-medium">Role</label>
       <select name="role" id="role" required
               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
@@ -32,7 +33,26 @@
         {% endfor %}
       </select>
     </div>
-  
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label for="email" class="block text-sm font-medium">Email (optional)</label>
+      <input type="email" name="email" id="email" value="{{ email or '' }}"
+             class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+    </div>
+    <div>
+      <label for="phone" class="block text-sm font-medium">Phone (optional)</label>
+      <input type="tel" name="phone" id="phone" value="{{ phone or '' }}"
+             class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+    </div>
+  </div>
+
+  <label class="inline-flex items-center gap-2">
+    <input type="checkbox" name="notify" value="1" {% if notify %}checked{% endif %} class="h-4 w-4">
+    <span>Notify when games break</span>
+  </label>
+
   <div class="flex justify-end gap-4 pt-4">
     <button type="button"
             hx-get="/settings/modal"
