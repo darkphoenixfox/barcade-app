@@ -16,22 +16,39 @@ def get_users(db: Session):
 def get_user_by_id(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
-# --- NEW ---
-def create_user(db: Session, name: str, pin: str, role: UserRole):
-    db_user = User(name=name, pin=pin, role=role)
+def create_user(db: Session, name: str, pin: str, role: UserRole,
+                email: Optional[str] = None,
+                phone: Optional[str] = None,
+                notify: bool = False):
+    db_user = User(name=name, pin=pin, role=role,
+                   email=(email or None),
+                   phone=(phone or None),
+                   notify=bool(notify))
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
 
-def update_user(db: Session, user: User, name: str, pin: Optional[str], role: UserRole):
+def update_user(db: Session, user: User, name: str, pin: Optional[str], role: UserRole,
+                email: Optional[str] = None,
+                phone: Optional[str] = None,
+                notify: Optional[bool] = None):
     user.name = name
     user.role = role
     if pin:
         user.pin = pin
+    user.email = (email or None)
+    user.phone = (phone or None)
+    if notify is not None:
+        user.notify = bool(notify)
     db.commit()
     db.refresh(user)
     return user
+
+def get_users_to_notify(db: Session):
+    return (db.query(User)
+              .filter(User.notify == True, User.email.isnot(None))  # noqa: E712
+              .all())
 
 def delete_user(db: Session, user_to_delete: User):
     db.delete(user_to_delete)

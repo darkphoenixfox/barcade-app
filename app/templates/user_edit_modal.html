@@ -12,27 +12,46 @@
       <div>
         <label for="name" class="block text-sm font-medium">Name</label>
         <input type="text" name="name" id="name" value="{{ user_to_edit.name }}" required
-               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
-      </div>
-      
-      <div>
-        <label for="pin" class="block text-sm font-medium">New PIN (optional)</label>
-        <input type="password" name="pin" id="pin" placeholder="Leave blank to keep current PIN" maxlength="4"
-               class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+              class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
       </div>
 
       <div>
-          <label for="role" class="block text-sm font-medium">Role</label>
-          <select name="role" id="role" required
-                  class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
-            {% for role in roles %}
-              <option value="{{ role.value }}" {% if user_to_edit.role.value == role.value %}selected{% endif %}>
-                {{ role.name | title }}
-              </option>
-            {% endfor %}
-          </select>
+        <label for="pin" class="block text-sm font-medium">New PIN (optional)</label>
+        <input type="password" name="pin" id="pin" placeholder="Leave blank to keep current PIN" maxlength="4"
+              class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+      </div>
+
+      <div>
+        <label for="role" class="block text-sm font-medium">Role</label>
+        <select name="role" id="role" required
+                class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+          {% for role in roles %}
+            <option value="{{ role.value }}" {% if user_to_edit.role.value == role.value %}selected{% endif %}>
+              {{ role.name | title }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="email" class="block text-sm font-medium">Email (optional)</label>
+          <input type="email" name="email" id="email" value="{{ user_to_edit.email or '' }}"
+                class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
         </div>
-      
+        <div>
+          <label for="phone" class="block text-sm font-medium">Phone (optional)</label>
+          <input type="tel" name="phone" id="phone" value="{{ user_to_edit.phone or '' }}"
+                class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+        </div>
+      </div>
+
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="notify" value="1" {% if user_to_edit.notify %}checked{% endif %}
+              class="h-4 w-4">
+        <span>Notify when games break</span>
+      </label>
+
       <div class="flex justify-end gap-4 pt-4">
         <button type="button"
                 hx-get="/settings/modal"
@@ -46,5 +65,6 @@
         </button>
       </div>
     </form>
+
   </div>
 </div>

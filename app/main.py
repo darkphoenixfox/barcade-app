@@ -1,4 +1,8 @@
 # app/main.py
+import os
+import smtplib
+from email.message import EmailMessage
+from fastapi import BackgroundTasks
 from fastapi import FastAPI, Request, Depends, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +15,8 @@ from pydantic import BaseModel
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from starlette.responses import Response
+
 
 from app import database, models, crud
 from app.models import Game, LogEntry, RevenueEntry, UserRole, Base
@@ -159,6 +165,31 @@ def build_revenue_series(entries, start: datetime, end: datetime, granularity: s
         out.append({"t": k.isoformat(), "amount": round(bins[k], 2)})
     return out
 
+def _send_email(to_addr: str, subject: str, body: str):
+    host = os.getenv("SMTP_HOST")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USERNAME")
+    pwd  = os.getenv("SMTP_PASSWORD")
+    sender = os.getenv("SMTP_FROM", user or "no-reply@example.com")
+    starttls = os.getenv("SMTP_STARTTLS", "true").lower() != "false"
+
+    if not host or not port or not sender:
+        # Mail is not configured; silently skip
+        return
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP(host, port, timeout=10) as s:
+        if starttls:
+            s.starttls()
+        if user and pwd:
+            s.login(user, pwd)
+        s.send_message(msg)
+
 
 def require_logged_in(request: Request):
     if not request.session.get("logged_in"):
@@ -286,6 +317,19 @@ def select_location(location_id: int = Form(...), request: Request = None):
 	return RedirectResponse(url="/", status_code=303)
 
 
+@app.get("/grid-fragment", response_class=HTMLResponse)
+def grid_fragment(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    location_id = request.session.get("location_id")
+    selected_location = crud.get_location_by_id(db, location_id) if location_id else None
+    games = crud.get_games_by_location(db, location_id) if location_id else []
+    return templates.TemplateResponse("grid_fragment.html", {
+        "request": request,
+        "user": user,
+        "selected_location": selected_location,
+        "games": games
+    })    
+    
 @app.get("/game/{game_id}/modal", response_class=HTMLResponse)
 def game_modal(game_id: int, request: Request, db: Session = Depends(get_db)):
 	user = get_current_user(request, db)
@@ -324,51 +368,93 @@ def status_change_prompt(game_id: int, status: str, request: Request, db: Sessio
         "submit_url": submit_url
     })
 
-
 @app.post("/game/{game_id}/report-fault")
 def report_fault(
-	request: Request,
-	game_id: int,
-	status: str = Form(...),
-	note: Optional[str] = Form(""),
-	db: Session = Depends(get_db)
+    request: Request,
+    game_id: int,
+    status: str = Form(...),
+    note: Optional[str] = Form(""),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
 ):
-	game = crud.get_game_by_id(db, game_id)
-	user = get_current_user(request, db)
+    game = crud.get_game_by_id(db, game_id)
+    user = get_current_user(request, db)
+    if not (game and user):
+        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
 
-	if game and user:
-		comment = note or f"{status.replace('_', ' ').title()} reported"
-		crud.report_fault(
-			db,
-			game=game,
-			user_id=user.id,
-			comment=comment,
-			status=models.GameStatus(status)
-		)
+    try:
+        new_status = models.GameStatus(status)
+    except ValueError:
+        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
+    if new_status == models.GameStatus.working:
+        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
 
-	return RedirectResponse(url="/", status_code=303)
+    comment = note or f"{new_status.value.replace('_', ' ').title()} reported"
+    crud.report_fault(db, game=game, user_id=user.id, comment=comment, status=new_status)
+
+    # optional notifications (left intact if you already wired them)
+    notify_enabled = os.getenv("EMAIL_NOTIFY_ON_FAULTS", "true").lower() in ("1","true","yes")
+    if notify_enabled and os.getenv("SMTP_HOST") and background_tasks and \
+       new_status in (models.GameStatus.needs_maintenance, models.GameStatus.out_of_order):
+
+        recipients = (db.query(models.User)
+                        .filter(models.User.notify == True,
+                                models.User.email.isnot(None),
+                                models.User.email != "")
+                        .all())
+        sent = set()
+        subj = f"[Barcade] {game.name} marked {new_status.value.replace('_',' ')}"
+        body = ("Hi {name},\n\nThe game '{game}' was marked '{status}' by {actor}.\n\n"
+                "Note: {comment}\n\n— Barcade")
+        for u in recipients:
+            if u.id == user.id: 
+                continue
+            email = (u.email or "").strip().lower()
+            if not email or email in sent:
+                continue
+            sent.add(email)
+            background_tasks.add_task(
+                _send_email,
+                email,
+                subject=subj,
+                body=body.format(
+                    name=u.name,
+                    game=game.name,
+                    status=new_status.value.replace('_',' '),
+                    actor=user.name,
+                    comment=comment or "-"
+                )
+            )
+
+    triggers = {
+        "status_changed": {"message": f"'{game.name}' marked {new_status.value.replace('_',' ')}."},
+        "close_modal": True,
+        "refresh_grid": True
+    }
+    return Response("", 200, {"HX-Trigger": json.dumps(triggers)})
 
 
 @app.post("/game/{game_id}/report-fix")
 def report_fix(
-	request: Request,
-	game_id: int,
-	note: Optional[str] = Form(""),
-	db: Session = Depends(get_db)
+    request: Request,
+    game_id: int,
+    note: Optional[str] = Form(""),
+    db: Session = Depends(get_db),
 ):
-	game = crud.get_game_by_id(db, game_id)
-	user = get_current_user(request, db)
+    game = crud.get_game_by_id(db, game_id)
+    user = get_current_user(request, db)
+    if not (game and user):
+        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
 
-	if game and user:
-		comment = note or "Marked as working"
-		crud.report_fix(
-			db,
-			game=game,
-			user_id=user.id,
-			comment=comment
-		)
+    comment = note or "Marked as working"
+    crud.report_fix(db, game=game, user_id=user.id, comment=comment)
 
-	return RedirectResponse(url="/", status_code=303)
+    triggers = {
+        "status_changed": {"message": f"'{game.name}' marked working."},
+        "close_modal": True,
+        "refresh_grid": True
+    }
+    return Response("", 200, {"HX-Trigger": json.dumps(triggers)})
 
 @app.post("/game/{game_id}/log-revenue")
 def log_revenue(
@@ -555,7 +641,6 @@ def status_series_api(
             "downtime_hours": round(downtime_seconds / 3600.0, 2),
         }
     }
-
 
 @app.get("/game/{game_id}/revenue-history", response_class=HTMLResponse)
 def revenue_history(request: Request, game_id: int, db: Session = Depends(get_db)):
@@ -1016,6 +1101,9 @@ def save_new_user(
     name: str = Form(...),
     pin: str = Form(...),
     role: models.UserRole = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    notify: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     current_user = get_current_user(request, db)
@@ -1029,15 +1117,18 @@ def save_new_user(
             "roles": models.UserRole,
             "name": name,
             "role": role.value,
+            "email": email or "",
+            "phone": phone or "",
+            "notify": bool(notify),
             "error": f"PIN '{pin}' is already taken by another user."
         }, status_code=200)
 
-    new_user = crud.create_user(db, name=name, pin=pin, role=role)
+    new_user = crud.create_user(db, name=name, pin=pin, role=role,
+                                email=email, phone=phone, notify=bool(notify))
 
-    trigger_data = {
-		"user_saved": {"message": f"User '{new_user.name}' has been created."}
-	}
+    trigger_data = {"user_saved": {"message": f"User '{new_user.name}' has been created."}}
     return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
+
 
 @app.delete("/settings/user/{user_id}/delete", response_class=HTMLResponse)
 def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
@@ -1084,6 +1175,9 @@ def save_user_changes(
     name: str = Form(...),
     pin: Optional[str] = Form(None),
     role: models.UserRole = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    notify: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     current_user = get_current_user(request, db)
@@ -1094,12 +1188,14 @@ def save_user_changes(
     if not user_to_edit:
         return HTMLResponse("<p>User not found</p>", status_code=404)
 
-    updated_user = crud.update_user(db, user=user_to_edit, name=name, pin=pin, role=role)
+    updated_user = crud.update_user(
+        db, user=user_to_edit, name=name, pin=pin, role=role,
+        email=email, phone=phone, notify=bool(notify)
+    )
 
-    trigger_data = {
-		"user_saved": {"message": f"User '{updated_user.name}' has been updated."}
-	}
+    trigger_data = {"user_saved": {"message": f"User '{updated_user.name}' has been updated."}}
     return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(trigger_data)})
+
 
 @app.get("/settings/games/add", response_class=HTMLResponse)
 def add_game_form(request: Request, db: Session = Depends(get_db)):
