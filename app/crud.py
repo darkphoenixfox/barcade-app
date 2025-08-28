@@ -162,17 +162,29 @@ def report_fix(db: Session, game: models.Game, user_id: int, comment: str = ""):
 
 # ----------- REVENUE -----------
 
-def log_revenue(db: Session, game: models.Game, user_id: int, amount: float, is_token: bool, period: str = ""):
-	entry = RevenueEntry(
-		game_id=game.id,
-		user_id=user_id,
-		amount=amount,
-		is_token=is_token,
-		period=period
-	)
-	db.add(entry)
-	db.commit()
-	return entry
+from typing import Optional
+from datetime import datetime
+
+def log_revenue(
+    db: Session,
+    game: models.Game,
+    user_id: int,
+    amount: float,
+    is_token: bool,
+    collected_at: Optional[datetime] = None
+):
+    entry = RevenueEntry(
+        game_id=game.id,
+        user_id=user_id,
+        amount=amount,
+        is_token=is_token
+    )
+    if collected_at:
+        entry.timestamp = collected_at  # override server_default now
+
+    db.add(entry)
+    db.commit()
+    return entry
 
 # --- History Deletion ---
 

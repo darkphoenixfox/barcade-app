@@ -17,6 +17,7 @@ from .database import engine, SessionLocal
 from .models import Base
 from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import JSONResponse
+from datetime import datetime, timedelta, timezone
 
 
 class LocationUpdateForm(BaseModel):
@@ -60,6 +61,106 @@ def get_current_user(request: Request, db: Session):
 
 def get_selected_location(request: Request):
 	return request.session.get("location_id", None)
+
+def _to_cash(amount: float, is_token: bool, token_value: float) -> float:
+    return (amount * token_value) if is_token else amount
+
+def _daterange_floor(dt: datetime, granularity: str) -> datetime:
+    if granularity == "daily":
+        return dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+    if granularity == "weekly":
+        # ISO week starts Monday
+        d0 = dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+        return d0 - timedelta(days=d0.weekday())
+    if granularity == "monthly":
+        return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.tzinfo)
+    return dt
+
+def _step(granularity: str) -> timedelta:
+    return timedelta(days=1 if granularity == "daily" else (7 if granularity == "weekly" else 30))
+
+def build_revenue_series(entries, start: datetime, end: datetime, granularity: str, token_value: float):
+    """
+    entries: ordered ASC by timestamp (Log-style: each entry's amount belongs to the interval since previous entry)
+    We distribute each entry's cash amount uniformly across [prev_time, curr_time).
+    Missing periods naturally get 0.
+    """
+    # Guard
+    if start >= end:
+        return []
+
+    # Ensure tz-aware
+    if start.tzinfo is None: start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:   end = end.replace(tzinfo=timezone.utc)
+
+    # Seed bins
+    bins = {}
+    cur = _daterange_floor(start, granularity)
+    step = _step(granularity)
+    while cur < end:
+        bins[cur] = 0.0
+        cur = cur + (timedelta(days=1) if granularity == "daily" else
+                     timedelta(days=7) if granularity == "weekly" else
+                     # monthly: approximate 30-day buckets (simple; avoids heavy calendar math)
+                     timedelta(days=30))
+
+    # Prepare an artificial first previous time = start window (so earliest entry in range distributes from its own previous or the window start)
+    prev_time = None
+    prev_amount_cash = None
+
+    # We’ll compute on each entry's timestamp boundary
+    # First, prepend a synthetic "begin marker" at start so that first real entry can consider earlier time if needed
+    # Actually we need the previous entry outside the range. So fetch the previous one if exists:
+    # (We’ll query it in the route; here assume route gives us prev_outside if needed.)
+    # This helper expects entries to include one synthetic lead-in tuple: (prev_timestamp, None) to set prev_time.
+    # To keep function simple for you, we allow entries[0] carry prev via attribute ._prev; route sets it.
+
+    # Walk entries
+    for idx, e in enumerate(entries):
+        curr_time = e.timestamp
+        if curr_time.tzinfo is None:
+            curr_time = curr_time.replace(tzinfo=timezone.utc)
+
+        if prev_time is None:
+            # use synthetic previous from attribute or clamp to start
+            prev_time = getattr(e, "_prev_ts", start)
+            if prev_time.tzinfo is None:
+                prev_time = prev_time.replace(tzinfo=timezone.utc)
+
+        # clamp interval to [start, end)
+        interval_start = max(prev_time, start)
+        interval_end = min(curr_time, end)
+        if interval_end > interval_start:
+            duration = (interval_end - interval_start).total_seconds()
+            amount_cash = _to_cash(e.amount, e.is_token, token_value)
+            # Spread uniformly across the interval into overlapping bins
+            # Iterate per-day/week/month bin boundaries
+            bin_cursor = _daterange_floor(interval_start, granularity)
+            step_td = (timedelta(days=1) if granularity == "daily"
+                       else timedelta(days=7) if granularity == "weekly"
+                       else timedelta(days=30))
+            total_interval_seconds = (curr_time - prev_time).total_seconds()
+            # Avoid div by zero (same timestamp) – treat as instant: put all into the bin of curr_time
+            denom = max(total_interval_seconds, 1.0)
+            while bin_cursor < interval_end:
+                next_boundary = bin_cursor + step_td
+                seg_start = max(interval_start, bin_cursor)
+                seg_end = min(interval_end, next_boundary)
+                if seg_end > seg_start:
+                    frac = (seg_end - seg_start).total_seconds() / denom
+                    bins_key = _daterange_floor(bin_cursor, granularity)
+                    if bins_key in bins:
+                        bins[bins_key] += amount_cash * frac
+                bin_cursor = next_boundary
+
+        prev_time = curr_time
+
+    # Build sorted list
+    out = []
+    for k in sorted(bins.keys()):
+        out.append({"t": k.isoformat(), "amount": round(bins[k], 2)})
+    return out
+
 
 def require_logged_in(request: Request):
     if not request.session.get("logged_in"):
@@ -260,31 +361,49 @@ def report_fix(
 
 	return RedirectResponse(url="/", status_code=303)
 
-
-
 @app.post("/game/{game_id}/log-revenue")
 def log_revenue(
-	request: Request,
-	game_id: int,
-	amount: float = Form(...),
-	is_token: bool = Form(...),
-	period: str = Form(""),
-	db: Session = Depends(get_db)
+    request: Request,
+    game_id: int,
+    amount: float = Form(...),
+    is_token: bool = Form(...),
+    collected_at: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
 ):
-	game = crud.get_game_by_id(db, game_id)
-	user = get_current_user(request, db)
+    # Require a logged-in user
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-	if game and user:
-		crud.log_revenue(
-			db,
-			game=game,
-			user_id=user.id,
-			amount=amount,
-			is_token=is_token,
-			period=period
-		)
+    game = crud.get_game_by_id(db, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
 
-	return RedirectResponse(url="/", status_code=303)
+    # Parse optional date/datetime
+    parsed_ts = None
+    if collected_at:
+        try:
+            # Accept 'YYYY-MM-DD' or full ISO 'YYYY-MM-DDTHH:MM'
+            if len(collected_at) == 10:
+                dt = datetime.fromisoformat(collected_at)
+            else:
+                dt = datetime.fromisoformat(collected_at)
+            parsed_ts = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            parsed_ts = None  # ignore invalid input and fall back to "now"
+
+    # Persist
+    crud.log_revenue(
+        db=db,
+        game=game,
+        user_id=user.id,
+        amount=amount,
+        is_token=is_token,
+        collected_at=parsed_ts
+    )
+
+    # Back to dashboard (your UI flow expects a redirect)
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/game/{game_id}/status-history", response_class=HTMLResponse)
@@ -332,6 +451,56 @@ def revenue_history(request: Request, game_id: int, db: Session = Depends(get_db
 		"game": game,
 		"entries": revenue_entries,
 	})
+
+from datetime import datetime, timedelta, timezone
+
+@app.get("/game/{game_id}/revenue-series")
+def revenue_series_api(
+    game_id: int,
+    start: str | None = None,
+    end: str | None = None,
+    db: Session = Depends(get_db)
+):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Time window defaults: last 30 days
+    now = datetime.now(timezone.utc)
+    end_dt = datetime.fromisoformat(end).astimezone(timezone.utc) if end else now
+    start_dt = datetime.fromisoformat(start).astimezone(timezone.utc) if start else end_dt - timedelta(days=30)
+
+    entries = (
+        db.query(RevenueEntry)
+          .filter(RevenueEntry.game_id == game_id,
+                  RevenueEntry.timestamp >= start_dt,
+                  RevenueEntry.timestamp <= end_dt)
+          .order_by(RevenueEntry.timestamp.asc())
+          .all()
+    )
+
+    token_value = game.location.token_value if game.location else 1.0
+
+    def to_cash(amount: float, is_token: bool) -> float:
+        return (amount * token_value) if is_token else amount
+
+    series = []
+    for e in entries:
+        ts = e.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        series.append({
+            "t": ts.isoformat(),
+            "amount": round(to_cash(e.amount, e.is_token), 2),
+            "raw_amount": e.amount,
+            "type": "tokens" if e.is_token else "cash"
+        })
+
+    return {
+        "series": series,
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat()
+    }
 
 @app.get("/settings/modal", response_class=HTMLResponse)
 def settings_modal(request: Request, db: Session = Depends(get_db)):

@@ -1,28 +1,138 @@
-<!-- app/templates/revenue_history_modal.html -->
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-	<div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-md w-full p-6 relative space-y-6">
-		<button class="absolute top-2 right-3 text-gray-500 hover:text-white text-xl"
-		        onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
+<div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4" id="revenue-modal">
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-lg font-semibold">Revenue history — {{ game.name }}</h2>
+      <button class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+              onclick="document.dispatchEvent(new Event('close_modal'))">
+        ✕
+      </button>
+    </div>
 
-		<h2 class="text-xl font-bold">{{ game.name }}</h2>
-		<h3 class="text-sm font-semibold text-gray-600 dark:text-gray-200 uppercase">Revenue History</h3>
-
-		<div class="max-h-80 overflow-y-auto space-y-4 pr-1">
-			{% for entry in entries %}
-				<div class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white/60 dark:bg-gray-800/60">
-					<span class="text-xs font-semibold px-2 py-0.5 rounded-full mr-2 bg-blue-100 dark:bg-blue-900 text-blue-800">
-						Revenue
-					</span>
-					<span class="text-xs text-gray-700 dark:text-gray-300">
-						by {{ entry.user.name }} &bull; {{ entry.timestamp.strftime("%Y-%m-%d %H:%M") }}
-					</span>
-					<p class="text-sm mt-1 text-gray-800 dark:text-gray-200">
-						Amount: {{ entry.amount }} {{ "tokens" if entry.is_token else "cash" }}{% if entry.period %} ({{ entry.period }}){% endif %}
-					</p>
-				</div>
-			{% else %}
-				<p class="text-sm text-gray-600 dark:text-gray-400 italic">No revenue history available.</p>
-			{% endfor %}
+    <div class="px-4 py-3 space-y-3">
+      <!-- Controls -->
+		<div class="flex flex-wrap items-center gap-3">
+		<label class="text-sm">Range:</label>
+		<select id="rev-range" class="px-2 py-1 rounded bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm">
+			<option value="7">Last 7 days</option>
+			<option value="30" selected>Last 30 days</option>
+			<option value="90">Last 90 days</option>
+			<option value="180">Last 6 months</option>
+			<option value="365">Last year</option>
+		</select>
 		</div>
-	</div>
+
+
+      <!-- Chart -->
+      <div class="w-full">
+        <canvas id="rev-chart" height="140"></canvas>
+      </div>
+
+      <!-- Raw entries table -->
+      <div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+        <h3 class="text-sm font-semibold mb-2">Entries</h3>
+        <div class="max-h-64 overflow-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-gray-500 dark:text-gray-400">
+              <tr>
+                <th class="py-1 pr-2">Timestamp</th>
+                <th class="py-1 pr-2">Logged amount</th>
+                <th class="py-1 pr-2">Type</th>
+                <th class="py-1">User</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in entries %}
+              <tr class="border-t border-gray-100 dark:border-gray-800">
+                <td class="py-1 pr-2">{{ e.timestamp }}</td>
+                <td class="py-1 pr-2">
+                  {% if e.is_token %}{{ e.amount }} token(s){% else %}€{{ '%.2f' % e.amount }}{% endif %}
+                </td>
+                <td class="py-1 pr-2">{{ 'Tokens' if e.is_token else 'Cash' }}</td>
+                <td class="py-1">{{ e.user.name if e.user else '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-right">
+      <button class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
+              onclick="document.dispatchEvent(new Event('close_modal'))">Close</button>
+    </div>
+  </div>
 </div>
+
+<script>
+(function() {
+  const gameId = {{ game.id }};
+  const ctx = document.getElementById('rev-chart');
+  let chart;
+
+  function fmtEUR(x) { return '€' + (Math.round(x * 100) / 100).toFixed(2); }
+
+  function makeChart(points) {
+    // points: [{t, amount}]
+    const labels = points.map(p => new Date(p.t).toLocaleString());
+    const data = points.map(p => p.amount);
+
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Revenue (cash)',
+          data,
+          tension: 0.25,
+          pointRadius: 3,
+          spanGaps: false    // do NOT bridge missing entries; only actual points
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => fmtEUR(ctx.parsed.y)
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { maxRotation: 0 } },
+          y: { ticks: { callback: (v) => fmtEUR(v) } }
+        }
+      }
+    });
+  }
+
+  async function reload() {
+    const days = parseInt(document.getElementById('rev-range').value, 10);
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 86400 * 1000);
+
+    const qs = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString()
+    }).toString();
+
+    const res = await fetch(`/game/${gameId}/revenue-series?` + qs);
+    if (!res.ok) {
+      if (window.showToast) showToast('Error loading revenue series');
+      return;
+    }
+    const json = await res.json();
+    makeChart(json.series || []);
+  }
+
+  document.getElementById('rev-range').addEventListener('change', reload);
+
+  // First render
+  reload();
+})();
+</script>
+

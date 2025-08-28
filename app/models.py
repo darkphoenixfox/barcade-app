@@ -106,7 +106,6 @@ class RevenueEntry(Base):
 	timestamp = Column(DateTime(timezone=True), server_default=func.now())
 	amount = Column(Float, nullable=False)
 	is_token = Column(Boolean, default=False)
-	period = Column(String, nullable=True)
 
 	user_id = Column(Integer, ForeignKey("users.id"))
 	game_id = Column(Integer, ForeignKey("games.id"))
