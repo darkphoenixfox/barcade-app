@@ -18,7 +18,16 @@
 	<title>Barcade Dashboard</title>
 	<script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 
+	<!-- Favicons -->
+	<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='/favicon-16x16.png') }}">
+	<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/favicon-32x32.png') }}">
+	<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', path='/android-chrome-192x192.png') }}">
+	<link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', path='/android-chrome-512x512.png') }}">
+	<link rel="apple-touch-icon" href="{{ url_for('static', path='/apple_touch_icon.png') }}">
+	<link rel="shortcut icon" href="{{ url_for('static', path='/favicon-32x32.png') }}">
+
 </head>
+
 <body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
 	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow
                relative min-h-14
