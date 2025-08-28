@@ -5,7 +5,7 @@
 
   {% if selected_location %}
   <div id="grid"
-       class="relative inline-block border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800/50 shadow-lg overflow-hidden"
+     class="relative inline-block border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800/50 bg-clip-content shadow-lg overflow-hidden"
        data-cell-size="{{ selected_location.cell_size }}"
        data-rows="{{ selected_location.rows }}"
        data-columns="{{ selected_location.columns }}"
@@ -17,15 +17,15 @@
                   0deg,
                   transparent,
                   transparent {{ selected_location.cell_size - 1 }}px,
-                  rgba(0,0,0,0.08) {{ selected_location.cell_size - 1 }}px,
-                  rgba(0,0,0,0.08) {{ selected_location.cell_size }}px
+                  rgba(0,0,0,0.30) {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.30) {{ selected_location.cell_size }}px
                 ),
                 repeating-linear-gradient(
                   90deg,
                   transparent,
                   transparent {{ selected_location.cell_size - 1 }}px,
-                  rgba(0,0,0,0.08) {{ selected_location.cell_size - 1 }}px,
-                  rgba(0,0,0,0.08) {{ selected_location.cell_size }}px
+                  rgba(0,0,0,0.30) {{ selected_location.cell_size - 1 }}px,
+                  rgba(0,0,0,0.30) {{ selected_location.cell_size }}px
                 );">
 
     {# Render the games as draggable tiles #}
@@ -84,7 +84,9 @@
     z-index: 50;
     cursor: grabbing;
   }
+  
 </style>
+
 
 <script>
 (function () {
