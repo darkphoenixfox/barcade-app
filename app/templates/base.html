@@ -20,7 +20,10 @@
 
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
-	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow flex justify-between items-center relative min-h-14">
+	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow
+               relative min-h-14
+               flex flex-col gap-2
+               sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex items-center h-8">
 		{% if has_logo %}
 			<img src="/static/images/logo.png" alt="Barcade Logo" class="h-8 w-auto">
@@ -28,14 +31,17 @@
 			<h1 class="text-xl font-semibold">Barcade Management</h1>
 		{% endif %}
 		</div>
-        <div id="location-selector-container"
-             class="absolute left-1/2 -translate-x-1/2"
-             hx-get="/location-selector"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-             </div>
+		<div id="location-selector-container"
+			class="relative w-full order-3
+					md:order-none md:absolute md:left-1/2 md:-translate-x-1/2 md:w-auto
+					px-0 md:px-0 z-10"
+			hx-get="/location-selector"
+			hx-trigger="load"
+			hx-swap="innerHTML">
+		</div>
 
-		<div class="flex items-center gap-4">
+
+		<div class="flex items-center gap-4 flex-wrap justify-end">
 		{% if user %}
 		<div class="flex items-baseline gap-2">
 			<span class="font-semibold leading-none whitespace-nowrap">{{ user.name }}</span>
