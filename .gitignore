@@ -55,3 +55,6 @@ Thumbs.db
 
 # Ignore images in the static folder
 app/static/images/*
+
+# publishing tools
+*.ps1
