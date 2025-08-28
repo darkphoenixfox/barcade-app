@@ -368,6 +368,11 @@ def status_change_prompt(game_id: int, status: str, request: Request, db: Sessio
         "submit_url": submit_url
     })
 
+# at top (if missing)
+import os, json
+from fastapi import BackgroundTasks
+from fastapi.responses import Response, RedirectResponse
+
 @app.post("/game/{game_id}/report-fault")
 def report_fault(
     request: Request,
@@ -375,63 +380,78 @@ def report_fault(
     status: str = Form(...),
     note: Optional[str] = Form(""),
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks = None,   # no Depends()
 ):
     game = crud.get_game_by_id(db, game_id)
     user = get_current_user(request, db)
     if not (game and user):
-        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
+        # Close modal safely if something's off
+        return Response(content="", status_code=200,
+                        headers={"HX-Trigger": json.dumps({"close_modal": True})})
 
-    try:
-        new_status = models.GameStatus(status)
-    except ValueError:
-        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
-    if new_status == models.GameStatus.working:
-        return Response("", 200, {"HX-Trigger": json.dumps({"close_modal": True})})
-
+    # Persist the status change
+    new_status = models.GameStatus(status)
     comment = note or f"{new_status.value.replace('_', ' ').title()} reported"
     crud.report_fault(db, game=game, user_id=user.id, comment=comment, status=new_status)
 
-    # optional notifications (left intact if you already wired them)
+    # --- Email notifications (restored) ---
     notify_enabled = os.getenv("EMAIL_NOTIFY_ON_FAULTS", "true").lower() in ("1","true","yes")
-    if notify_enabled and os.getenv("SMTP_HOST") and background_tasks and \
-       new_status in (models.GameStatus.needs_maintenance, models.GameStatus.out_of_order):
-
-        recipients = (db.query(models.User)
-                        .filter(models.User.notify == True,
-                                models.User.email.isnot(None),
-                                models.User.email != "")
-                        .all())
-        sent = set()
-        subj = f"[Barcade] {game.name} marked {new_status.value.replace('_',' ')}"
-        body = ("Hi {name},\n\nThe game '{game}' was marked '{status}' by {actor}.\n\n"
-                "Note: {comment}\n\n— Barcade")
-        for u in recipients:
-            if u.id == user.id: 
-                continue
-            email = (u.email or "").strip().lower()
-            if not email or email in sent:
-                continue
-            sent.add(email)
-            background_tasks.add_task(
-                _send_email,
-                email,
-                subject=subj,
-                body=body.format(
-                    name=u.name,
-                    game=game.name,
-                    status=new_status.value.replace('_',' '),
-                    actor=user.name,
-                    comment=comment or "-"
+    smtp_host = (os.getenv("SMTP_HOST") or "").strip()
+    if notify_enabled and smtp_host and new_status in (
+        models.GameStatus.needs_maintenance,
+        models.GameStatus.out_of_order,
+    ):
+        recipients = (
+            db.query(models.User)
+              .filter(models.User.notify == True,
+                      models.User.email.isnot(None),
+                      models.User.email != "")
+              .all()
+        )
+        subject = f"[Barcade] {game.name} marked {new_status.value.replace('_', ' ')}"
+        body_tmpl = (
+            "Hi {name},\n\n"
+            "The game '{game}' was marked '{status}' by {actor}.\n\n"
+            "Note: {comment}\n\n"
+            "— Barcade"
+        )
+        if background_tasks:
+            for u in recipients:
+                if u.id == user.id:
+                    continue
+                email = (u.email or "").strip()
+                if not email:
+                    continue
+                background_tasks.add_task(
+                    _send_email,
+                    to_addr=email,
+                    subject=subject,
+                    body=body_tmpl.format(
+                        name=u.name,
+                        game=game.name,
+                        status=new_status.value.replace('_',' '),
+                        actor=user.name,
+                        comment=comment or "-",
+                    ),
                 )
-            )
+    # --------------------------------------
 
+    # HTMX triggers for toast + modal close + partial grid refresh
     triggers = {
-        "status_changed": {"message": f"'{game.name}' marked {new_status.value.replace('_',' ')}."},
-        "close_modal": True,
-        "refresh_grid": True
+        "status_changed": {
+            "message": f"'{game.name}' marked {new_status.value.replace('_',' ')}.",
+            "id": game.id,
+            "status": new_status.value
+        },
+        "refresh_grid": True,
+        "close_modal": True
     }
-    return Response("", 200, {"HX-Trigger": json.dumps(triggers)})
+
+    # If HTMX request -> fire events; else -> normal redirect
+    if request.headers.get("HX-Request") == "true":
+        return Response(content="", status_code=200, headers={"HX-Trigger": json.dumps(triggers)})
+    return RedirectResponse(url="/", status_code=303)
+
 
 
 @app.post("/game/{game_id}/report-fix")

@@ -256,6 +256,24 @@
 			htmx.process(evt.detail.target);
 		}
 	});
+
+	document.addEventListener('refresh_grid', function () {
+		const grid = document.getElementById('grid');
+		if (!grid) return;
+
+		// Pull new grid contents without replacing the #grid element itself
+		htmx.ajax('GET', '/grid-fragment', '#grid')
+			.then(() => {
+				// Re-process HTMX attributes inside the refreshed markup
+				htmx.process(grid);
+			});
+	});
+
+	// Optional: toast on status change
+	document.addEventListener('status_changed', function (e) {
+		const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Status updated';
+		if (window.showToast) showToast(msg);
+	});
 	</script>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </body>

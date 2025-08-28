@@ -1,0 +1,46 @@
+{# app/templates/grid_fragment.html #}
+{# This template renders ONLY the inner content of <div id="grid">…</div> #}
+
+{% for game in games %}
+  <div id="game-{{ game.id }}"
+       class="absolute text-center game-tile"
+       data-game-id="{{ game.id }}"
+       data-x="{{ game.x }}"
+       data-y="{{ game.y }}"
+
+       {# Safety defaults if x/y missing #}
+       {% set gx = game.x or 1 %}
+       {% set gy = game.y or 1 %}
+
+       style="left: {{ (gx - 1) * selected_location.cell_size }}px;
+              top:  {{ (gy - 1) * selected_location.cell_size }}px;
+              width: {{ selected_location.cell_size }}px;
+              height: {{ selected_location.cell_size }}px;">
+
+    <div class="h-full flex flex-col justify-center items-center cursor-move p-1"
+         hx-get="/game/{{ game.id }}/modal"
+         hx-target="#modal-container"
+         hx-trigger="dblclick"
+         hx-swap="innerHTML">
+
+      <img
+        src="{{ '/static/images/' ~ game.icon if game.icon else '/static/default.png' }}"
+        style="max-width: {{ selected_location.cell_size / 2 }}px; max-height: {{ selected_location.cell_size / 2 }}px;"
+        class="mb-1 object-contain"
+        alt="{{ game.name }}"
+        draggable="false">
+
+      <span class="text-xs font-semibold block text-center px-2 py-0.5 rounded-full
+                   bg-white/80 dark:bg-gray-900/80 text-black dark:text-white shadow-sm"
+            draggable="false">
+        {{ game.name }}
+      </span>
+
+      <span class="mt-1 text-xs font-medium block text-center px-2 py-0.5 rounded-full shadow-sm
+                   {{ status_classes(game.status) }}"
+            draggable="false">
+        {{ game.status.value.replace('_', ' ') | title }}
+      </span>
+    </div>
+  </div>
+{% endfor %}
