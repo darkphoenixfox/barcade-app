@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   barcade:
     build: .
@@ -8,6 +6,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/code
+      - ./data:/data
     environment:
-      - DATABASE_URL=sqlite:///./barcade.db
+      - DATABASE_URL=sqlite:////data/barcade.db
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
