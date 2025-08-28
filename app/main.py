@@ -353,10 +353,10 @@ def report_fault(
         recipients = db.query(models.User).filter(
             models.User.notify == True, models.User.email.isnot(None), models.User.email != ""
         ).all()
-        subject = f"[Barcade] {game.name} marked {new_status.value.replace('_', ' ')}"
+        subject = f"[Barcade App] {game.name} marked {new_status.value.replace('_', ' ')}"
         body_tmpl = (
             "Hi {name},\n\nThe game '{game}' was marked '{status}' by {actor}.\n\n"
-            "Note: {comment}\n\n— Barcade"
+            "Note: {comment}\n\n— You received this email because your user is subscribed to game fault updates."
         )
         for u in recipients:
             if u.id != user.id and u.email:
