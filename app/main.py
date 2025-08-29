@@ -883,7 +883,7 @@ def add_category_form(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/settings/category/add", response_class=Response)
 def save_new_category(
-    request: Request, name: str = Form(...), icon: Optional[str] = Form(None),
+    request: Request, name: str = Form(...), icon_upload: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
@@ -893,10 +893,18 @@ def save_new_category(
     if crud.get_category_by_name(db, name.strip()):
         return templates.TemplateResponse("category_add_modal.html", {
             "request": request, "error": f"A category named '{name}' already exists.",
-            "name": name, "icon": icon or ""
+            "name": name
         })
 
-    new_cat = crud.create_category(db, name=name, icon=icon)
+    icon_filename = None
+    if icon_upload and icon_upload.filename:
+        save_path = Path("app/static/images") / icon_upload.filename
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(icon_upload.file, buffer)
+        icon_filename = icon_upload.filename
+
+    new_cat = crud.create_category(db, name=name, icon=icon_filename)
     trigger = {"settings_saved": {"message": f"Category '{new_cat.name}' created."}}
     return Response(headers={"HX-Trigger": json.dumps(trigger)})
 
@@ -915,7 +923,7 @@ def edit_category_form(category_id: int, request: Request, db: Session = Depends
 @app.post("/settings/category/{category_id}/edit", response_class=Response)
 def save_category_changes(
     category_id: int, request: Request, name: str = Form(...),
-    icon: Optional[str] = Form(None), db: Session = Depends(get_db)
+    icon_upload: UploadFile = File(None), db: Session = Depends(get_db)
 ):
     user = get_current_user(request, db)
     if not user or user.role != models.UserRole.admin:
@@ -931,8 +939,18 @@ def save_category_changes(
             "error": f"A category named '{name}' already exists."
         })
 
-    updated = crud.update_category(db, category, name=name, icon=icon)
-    trigger = {"settings_saved": {"message": f"Category '{updated.name}' updated."}}
+    if icon_upload and icon_upload.filename:
+        save_path = Path("app/static/images") / icon_upload.filename
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(icon_upload.file, buffer)
+        category.icon = icon_upload.filename
+
+    category.name = name.strip()
+    db.commit()
+    db.refresh(category)
+
+    trigger = {"settings_saved": {"message": f"Category '{category.name}' updated."}}
     return Response(headers={"HX-Trigger": json.dumps(trigger)})
 
 @app.delete("/settings/category/{category_id}/delete", response_class=HTMLResponse)

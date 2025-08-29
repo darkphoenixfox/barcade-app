@@ -1,8 +1,13 @@
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
      onclick="if (event.target === this) document.getElementById('modal-container').innerHTML = ''">
   <div class="bg-white dark:bg-gray-900 text-black dark:text-white rounded-lg shadow-lg max-w-4xl w-full p-6 relative">
-    <button class="absolute top-2 right-3 text-gray-500 hover:text-black text-xl"
-            onclick="document.getElementById('modal-container').innerHTML = ''">&times;</button>
+    <button id="settings-help-button" class="absolute top-2 right-12 h-8 w-8 inline-flex items-baseline justify-center text-gray-400 hover:text-blue-500 text-xl">
+      <i class="fa-solid fa-circle-question"></i>
+    </button>
+    <button class="absolute top-2 right-2 h-8 w-8 inline-flex items-baseline justify-center text-gray-500 hover:text-black dark:hover:text-white text-xl"
+            onclick="document.getElementById('modal-container').innerHTML = ''">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
 
     <h2 class="text-xl font-bold mb-2">Settings</h2>
     {% if selected_location %}
@@ -12,7 +17,7 @@
     {% endif %}
 
     <div class="border-b border-gray-300 dark:border-gray-700 mb-4">
-      <nav class="flex gap-4 text-sm font-medium">
+      <nav id="settings-tabs-nav" class="flex gap-4 text-sm font-medium">
         <button
           id="settings-tab-locations" hx-get="/settings/locations"
           hx-target="#settings-content"
@@ -60,3 +65,46 @@
   </div>
 </div>
 
+<script>
+(function() {
+	const helpButton = document.getElementById('settings-help-button');
+	if (helpButton) {
+		const tour = new Shepherd.Tour({
+			useModalOverlay: true,
+			defaultStepOptions: {
+				classes: 'shadow-md bg-blue-600 text-white',
+				scrollTo: true,
+				cancelIcon: { enabled: true },
+				popperOptions: { modifiers: [{ name: 'offset', options: { offset: [0, 12] } }] }
+			}
+		});
+
+		// Step 1: Tabs
+		tour.addStep({
+			title: 'Settings Navigation',
+      text: `
+        <p>Use these tabs to switch between different settings panels:</p>
+        <ul class="list-disc list-inside text-left mt-2 space-y-1">
+          <li><strong>Locations:</strong> Add, edit, and remove locations (rooms, floors, venues...).</li>
+          <li><strong>Games:</strong> Add, edit, and remove games.</li>
+          <li><strong>Categories:</strong> Add, edit, and remove categories (Arcade, pinball, console...).</li>
+          <li><strong>Users:</strong> Add and remove users, change names, emails, pins...</li>
+          <li><strong>Admin:</strong> Clear the revenue and failure history for games.</li>
+        </ul>
+      `,
+			attachTo: { element: '#settings-tabs-nav', on: 'bottom' },
+			buttons: [{ text: 'Next', action: tour.next }]
+		});
+
+		// Step 2: Content
+		tour.addStep({
+			title: 'Content Area',
+			text: 'The options for the selected tab will be loaded here. You can manage all your settings from this area.',
+			attachTo: { element: '#settings-content', on: 'top' },
+			buttons: [{ text: 'Finish', action: tour.complete }]
+		});
+
+		helpButton.addEventListener('click', () => tour.start());
+	}
+})();
+</script>
