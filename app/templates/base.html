@@ -19,12 +19,12 @@
 	<script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 
 	<!-- Favicons -->
-	<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='/favicon-16x16.png') }}">
-	<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/favicon-32x32.png') }}">
-	<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', path='/android-chrome-192x192.png') }}">
-	<link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', path='/android-chrome-512x512.png') }}">
-	<link rel="apple-touch-icon" href="{{ url_for('static', path='/apple_touch_icon.png') }}">
-	<link rel="shortcut icon" href="{{ url_for('static', path='/favicon-32x32.png') }}">
+	<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="192x192" href="/static/android-chrome-192x192.png">
+	<link rel="icon" type="image/png" sizes="512x512" href="/static/android-chrome-512x512.png">
+	<link rel="apple-touch-icon" href="/static/apple_touch_icon.png">
+	<link rel="shortcut icon" href="/static/favicon-32x32.png">
 
 </head>
 
@@ -78,14 +78,11 @@
 			</a>
 
 			{% else %}
-				<form method="post" action="/login" class="flex items-center gap-2">
-				<input name="pin" type="password" placeholder="Enter PIN" maxlength="4"
-					class="h-8 px-2 rounded text-black text-sm leading-none" required>
-				<button type="submit"
-					class="h-8 inline-flex items-center px-3 rounded font-semibold text-sm bg-white text-blue-800">
-					Login
-				</button>
-				</form>
+			<form method="post" action="/login" id="login-form" class="flex items-center">
+			<input name="pin" id="pin-input" type="password" placeholder="PIN"
+				maxlength="4" autofocus
+				class="h-8 w-20 text-center px-2 rounded text-black text-sm leading-none" required>
+			</form>
 			{% endif %}
 
 			<button onclick="toggleDarkMode()" class="text-white hover:text-gray-300 text-xl ml-4">
@@ -276,5 +273,18 @@
 	});
 	</script>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+	<script>
+	document.addEventListener("DOMContentLoaded", function() {
+	const pinInput = document.getElementById("pin-input");
+	const loginForm = document.getElementById("login-form");
+	if (pinInput && loginForm) {
+		pinInput.addEventListener("input", function() {
+		if (this.value.length === 4) {
+			loginForm.submit();
+		}
+		});
+	}
+	});
+	</script>
 </body>
 </html>

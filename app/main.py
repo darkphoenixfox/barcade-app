@@ -47,6 +47,7 @@ app.add_middleware(SessionMiddleware, secret_key="barcade-secret")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["has_logo"] = Path("app/static/images/logo.png").exists()
+templates.env.globals["datetime"] = datetime
 install_template_filters(templates)
 
 
