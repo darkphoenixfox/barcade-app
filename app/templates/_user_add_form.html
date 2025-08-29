@@ -5,6 +5,7 @@
 {% endif %}
 
 <form
+  id="add-user-form"
   hx-post="/settings/user/add"
   hx-target="#add-user-form-wrapper"
   hx-swap="innerHTML"
@@ -22,6 +23,7 @@
       <label for="pin" class="block text-sm font-medium">4-digit PIN</label>
       <input type="password" name="pin" id="pin" required maxlength="4" inputmode="numeric" autocomplete="new-password"
              class="mt-1 w-full border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-600">
+      <span id="pin-error" class="text-red-500 text-sm mt-1 block h-4"></span>
     </div>
 
     <div>
@@ -66,3 +68,24 @@
     </button>
   </div>
 </form>
+
+<script>
+(function() {
+  const form = document.getElementById('add-user-form');
+  const pinInput = document.getElementById('pin');
+  const pinError = document.getElementById('pin-error');
+
+  form.addEventListener('submit', function(event) {
+    // Clear any previous error message on new submission attempt
+    pinError.textContent = '';
+
+    // Check if the PIN field is empty
+    if (pinInput.value.trim() === '') {
+      // Prevent the form from submitting
+      event.preventDefault();
+      // Display the error message
+      pinError.textContent = 'PIN cannot be empty.';
+    }
+  });
+})();
+</script>

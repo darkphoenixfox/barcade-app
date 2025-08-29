@@ -30,7 +30,7 @@
 </head>
 
 <body class="bg-gray-100 dark:bg-gray-900 text-black dark:text-white min-h-screen font-sans">
-	<header class="bg-blue-800 dark:bg-blue-900 text-white p-4 shadow
+	<header class="bg-blue-800 dark:bg-blue-950 text-white p-4 shadow
                relative min-h-14
                flex flex-col gap-2
                sm:flex-row sm:items-center sm:gap-4">
@@ -106,9 +106,13 @@
 	<div id="modal-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/js/shepherd.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
 	<script>
-		function toggleDarkMode() {
+	document.addEventListener("DOMContentLoaded", function() {
+		
+		// --- Helper Functions ---
+		window.toggleDarkMode = function() {
 			const html = document.documentElement;
 			const isDark = html.classList.contains('dark');
 
@@ -121,8 +125,7 @@
 			}
 		}
 
-		// Simple toast
-		function showToast(message) {
+		window.showToast = function(message) {
 			const wrap = document.getElementById('toast');
 			const el = document.createElement('div');
 			el.className = "pointer-events-auto bg-green-600 text-white px-4 py-2 rounded shadow";
@@ -135,75 +138,9 @@
 			}, 2000);
 		}
 
-		document.body.addEventListener('htmx:afterOnLoad', function (evt) {
-			try {
-			const xhr = evt.detail && evt.detail.xhr;
-			if (!xhr) return;
-
-			// Only react to /game/{id}/move responses
-			const url = (xhr.responseURL || '');
-			if (!url.includes('/game/') || !url.includes('/move')) return;
-
-			// Try to read JSON and decide
-			const text = xhr.responseText || '';
-			if (!text) return;
-
-			let data;
-			try { data = JSON.parse(text); } catch { return; }
-
-			if (data && data.unchanged) {
-				// No toast when nothing moved
-				return;
-			}
-			if ((data && (data.moved || data.swapped))) {
-				// Show success toast only when a move/swap actually happened
-				showToast('Position updated');
-			}
-			} catch (e) {
-			// fail-quietly; no toast is better than a broken header
-			}
-		});
-
-		// HTMX custom event handler for simple saves (no reload)
-		document.addEventListener('settings_saved', function (e) {
-			const msg = (e && e.detail && e.detail.message) ? e.detail.message : "Settings saved";
-			showToast(msg);
-		});
-
-		//HTMX custom event handler for revenue logging
-		document.addEventListener('revenue_logged', function (e) {
-			const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Revenue logged';
-			if (window.showToast) showToast(msg);
-  		});
-
-
-		// Script to run on page load to check session storage for post-reload actions
-		document.body.addEventListener('htmx:load', () => {
-			const postReloadData = sessionStorage.getItem('postReload');
-
-			if (postReloadData) {
-				sessionStorage.removeItem('postReload');
-				const data = JSON.parse(postReloadData);
-
-				if (data.action === 'openSettings') {
-					htmx.ajax('GET', '/settings/modal', '#modal-container');
-				}
-
-				setTimeout(() => {
-					if (data.tab) {
-						const tabButton = document.getElementById(`settings-tab-${data.tab}`);
-						if (tabButton) {
-							tabButton.click();
-						}
-					}
-					if (data.toastMessage) {
-						showToast(data.toastMessage);
-					}
-				}, 200);
-			}
-		});
-
-		// Listener for the Escape key to close modals
+		// --- Global Event Listeners ---
+		
+		// Modal & System Listeners
 		document.addEventListener('keydown', function (event) {
 			if (event.key === 'Escape') {
 				const modal = document.getElementById('modal-container');
@@ -213,102 +150,103 @@
 			}
 		});
 
-		// Close modal on HX-Trigger "close_modal"
 		document.addEventListener('close_modal', function () {
 			const mc = document.getElementById('modal-container');
 			if (mc) mc.innerHTML = '';
 		});
 
-		// Ensure HTMX processes freshly injected modal HTML
+		// HTMX-Specific Listeners
 		document.body.addEventListener("htmx:afterSwap", function (evt) {
 			if (evt.detail.target && evt.detail.target.id === "modal-container") {
 				htmx.process(evt.detail.target);
 			}
 		});
+		
+		document.body.addEventListener('htmx:load', () => {
+			const postReloadData = sessionStorage.getItem('postReload');
+			if (postReloadData) {
+				sessionStorage.removeItem('postReload');
+				const data = JSON.parse(postReloadData);
+				if (data.action === 'openSettings') {
+					htmx.ajax('GET', '/settings/modal', '#modal-container');
+				}
+				setTimeout(() => {
+					if (data.tab) {
+						const tabButton = document.getElementById(`settings-tab-${data.tab}`);
+						if (tabButton) tabButton.click();
+					}
+					if (data.toastMessage) showToast(data.toastMessage);
+				}, 200);
+			}
+		});
+		
+		document.body.addEventListener('htmx:afterOnLoad', function (evt) {
+			try {
+				const xhr = evt.detail?.xhr;
+				if (!xhr) return;
+				const url = (xhr.responseURL || '');
+				if (!url.includes('/game/') || !url.includes('/move')) return;
 
-		document.addEventListener('refresh_grid', function () {
-			const grid = document.getElementById('grid');
-			if (!grid) return;
-
-			// Pull new grid contents without replacing the #grid element itself
-			htmx.ajax('GET', '/grid-fragment', '#grid')
-				.then(() => {
-					// Re-process HTMX attributes inside the refreshed markup
-					htmx.process(grid);
-				});
+				const data = JSON.parse(xhr.responseText || '{}');
+				if (data && (data.moved || data.swapped)) {
+					showToast('Position updated');
+				}
+			} catch (e) { /* Fail silently */ }
 		});
 
-		// Optional: toast on status change
-		document.addEventListener('status_changed', function (e) {
-			const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Status updated';
-			if (window.showToast) showToast(msg);
-		});
-	</script>
-	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-	<script>
-	document.addEventListener("DOMContentLoaded", function() {
-		// --- Event Listeners for post-save actions (reload & reopen modal) ---
-
-		// Event listener for saving a location
+		// Custom Application Event Listeners (Post-Save Reloads)
 		document.addEventListener('location_saved', function (e) {
 			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message
-			};
+			const postReloadData = { action: 'openSettings', toastMessage: message };
 			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
 			window.location.reload();
 		});
 
-		// Event listener for saving a game
 		document.addEventListener('game_saved', function (e) {
 			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message,
-				tab: 'games'
-			};
+			const postReloadData = { action: 'openSettings', toastMessage: message, tab: 'games' };
 			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
 			window.location.reload();
 		});
 
-		// Event listener for saving a user
 		document.addEventListener('user_saved', function (e) {
 			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message,
-				tab: 'users'
-			};
+			const postReloadData = { action: 'openSettings', toastMessage: message, tab: 'users' };
 			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
 			window.location.reload();
 		});
-
-		// Event listener for saving a category
+		
 		document.addEventListener('category_saved', function (e) {
 			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message,
-				tab: 'categories'
-			};
+			const postReloadData = { action: 'openSettings', toastMessage: message, tab: 'categories' };
 			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
 			window.location.reload();
 		});
 
+		// Custom Application Event Listeners (Simple Toasts & Refreshes)
+		document.addEventListener('settings_saved', (e) => showToast(e.detail?.message || "Settings saved"));
+		document.addEventListener('revenue_logged', (e) => showToast(e.detail?.message || 'Revenue logged'));
+		document.addEventListener('status_changed', (e) => showToast(e.detail?.message || 'Status updated'));
+		
+		document.addEventListener('refresh_grid', function () {
+			const grid = document.getElementById('grid');
+			if (grid) {
+				htmx.ajax('GET', '/grid-fragment', '#grid').then(() => htmx.process(grid));
+			}
+		});
+		
+		// --- Initializers ---
 
-		// --- Auto-submit PIN form ---
+		// Auto-submit PIN form
 		const pinInput = document.getElementById("pin-input");
 		const loginForm = document.getElementById("login-form");
 		if (pinInput && loginForm) {
 			pinInput.addEventListener("input", function() {
-			if (this.value.length === 4) {
-				loginForm.submit();
-			}
+				if (this.value.length === 4) loginForm.submit();
 			});
 		}
 
-		// --- Shepherd Tour Logic ---
+		// Shepherd Guided Tour Logic
 		const helpButton = document.getElementById('help-button');
 		if (helpButton) {
 			const tour = new Shepherd.Tour({
@@ -316,18 +254,12 @@
 				defaultStepOptions: {
 					classes: 'shadow-md bg-blue-600 text-white',
 					scrollTo: true,
-					cancelIcon: {
-						enabled: true
-					},
-					popperOptions: {
-						modifiers: [{ name: 'offset', options: { offset: [0, 8] } }]
-					}
+					cancelIcon: { enabled: true },
+					popperOptions: { modifiers: [{ name: 'offset', options: { offset: [0, 8] } }] }
 				},
-
 			});
 
 			{% if not user %}
-				// --- Logged Out Tour ---
 				tour.addStep({
 					title: 'Welcome!',
 					text: 'Enter your 4-digit PIN here to log in.',
@@ -335,11 +267,9 @@
 					buttons: [{ text: 'Got it', action: tour.complete }]
 				});
 			{% else %}
-				// --- Logged In Tour ---
 				let firstGameTile = null;
 				const allGameTiles = document.querySelectorAll('.game-tile');
 				if (allGameTiles.length > 0) {
-					// Find the tile with the lowest y, then the lowest x coordinate.
 					firstGameTile = [...allGameTiles].reduce((topLeft, current) => {
 						const topLeftY = parseInt(topLeft.dataset.y, 10);
 						const currentY = parseInt(current.dataset.y, 10);
@@ -367,7 +297,6 @@
 						buttons: [{ text: 'Next', action: tour.next }]
 					});
 				} else if (document.getElementById('grid')) {
-					// Fallback step for when the grid is empty
 					let gridHelpText = 'This is where your games will appear. Once added, you can drag them to change their position or double-click to see details.';
 					{% if user.role.value == "admin" %}
 						gridHelpText += ' To get started, add a new game from the <strong>Settings</strong> menu.';
@@ -387,8 +316,6 @@
 					buttons: [{ text: 'Next', action: tour.next }]
 				});
 
-
-
 				{% if user.role.value == "admin" %}
 				tour.addStep({
 					title: 'Admin Settings',
@@ -404,9 +331,7 @@
 					attachTo: { element: '#logout-button', on: 'bottom' },
 					buttons: [{ text: 'Finish', action: tour.complete }]
 				});
-
 			{% endif %}
-
 
 			helpButton.addEventListener('click', () => {
 				tour.start();
