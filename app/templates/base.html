@@ -164,42 +164,6 @@
 			}
 		});
 
-		// Event listener for saving a location
-		document.addEventListener('location_saved', function (e) {
-			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message
-			};
-			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
-			window.location.reload();
-		});
-
-		// Event listener for saving a game
-		document.addEventListener('game_saved', function (e) {
-			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message,
-				tab: 'games'
-			};
-			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
-			window.location.reload();
-		});
-
-		// --- NEW: Event listener for saving a user ---
-		document.addEventListener('user_saved', function (e) {
-			const message = e.detail.message;
-			const postReloadData = {
-				action: 'openSettings',
-				toastMessage: message,
-				tab: 'users'
-			};
-			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
-			window.location.reload();
-		});
-
-
 		// HTMX custom event handler for simple saves (no reload)
 		document.addEventListener('settings_saved', function (e) {
 			const msg = (e && e.detail && e.detail.message) ? e.detail.message : "Settings saved";
@@ -213,7 +177,7 @@
   		});
 
 
-		// Script to run on page load to check session storage
+		// Script to run on page load to check session storage for post-reload actions
 		document.body.addEventListener('htmx:load', () => {
 			const postReloadData = sessionStorage.getItem('postReload');
 
@@ -239,7 +203,7 @@
 			}
 		});
 
-		// Listener for the Escape key
+		// Listener for the Escape key to close modals
 		document.addEventListener('keydown', function (event) {
 			if (event.key === 'Escape') {
 				const modal = document.getElementById('modal-container');
@@ -249,40 +213,91 @@
 			}
 		});
 
-	// Close modal on HX-Trigger "close_modal"
-	document.addEventListener('close_modal', function () {
-		const mc = document.getElementById('modal-container');
-		if (mc) mc.innerHTML = '';
-	});
+		// Close modal on HX-Trigger "close_modal"
+		document.addEventListener('close_modal', function () {
+			const mc = document.getElementById('modal-container');
+			if (mc) mc.innerHTML = '';
+		});
 
-	// Ensure HTMX processes freshly injected modal HTML
-	document.body.addEventListener("htmx:afterSwap", function (evt) {
-		if (evt.detail.target && evt.detail.target.id === "modal-container") {
-			htmx.process(evt.detail.target);
-		}
-	});
+		// Ensure HTMX processes freshly injected modal HTML
+		document.body.addEventListener("htmx:afterSwap", function (evt) {
+			if (evt.detail.target && evt.detail.target.id === "modal-container") {
+				htmx.process(evt.detail.target);
+			}
+		});
 
-	document.addEventListener('refresh_grid', function () {
-		const grid = document.getElementById('grid');
-		if (!grid) return;
+		document.addEventListener('refresh_grid', function () {
+			const grid = document.getElementById('grid');
+			if (!grid) return;
 
-		// Pull new grid contents without replacing the #grid element itself
-		htmx.ajax('GET', '/grid-fragment', '#grid')
-			.then(() => {
-				// Re-process HTMX attributes inside the refreshed markup
-				htmx.process(grid);
-			});
-	});
+			// Pull new grid contents without replacing the #grid element itself
+			htmx.ajax('GET', '/grid-fragment', '#grid')
+				.then(() => {
+					// Re-process HTMX attributes inside the refreshed markup
+					htmx.process(grid);
+				});
+		});
 
-	// Optional: toast on status change
-	document.addEventListener('status_changed', function (e) {
-		const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Status updated';
-		if (window.showToast) showToast(msg);
-	});
+		// Optional: toast on status change
+		document.addEventListener('status_changed', function (e) {
+			const msg = (e && e.detail && e.detail.message) ? e.detail.message : 'Status updated';
+			if (window.showToast) showToast(msg);
+		});
 	</script>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 	<script>
 	document.addEventListener("DOMContentLoaded", function() {
+		// --- Event Listeners for post-save actions (reload & reopen modal) ---
+
+		// Event listener for saving a location
+		document.addEventListener('location_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+		// Event listener for saving a game
+		document.addEventListener('game_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message,
+				tab: 'games'
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+		// Event listener for saving a user
+		document.addEventListener('user_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message,
+				tab: 'users'
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+		// Event listener for saving a category
+		document.addEventListener('category_saved', function (e) {
+			const message = e.detail.message;
+			const postReloadData = {
+				action: 'openSettings',
+				toastMessage: message,
+				tab: 'categories'
+			};
+			sessionStorage.setItem('postReload', JSON.stringify(postReloadData));
+			window.location.reload();
+		});
+
+
+		// --- Auto-submit PIN form ---
 		const pinInput = document.getElementById("pin-input");
 		const loginForm = document.getElementById("login-form");
 		if (pinInput && loginForm) {
@@ -308,7 +323,7 @@
 						modifiers: [{ name: 'offset', options: { offset: [0, 8] } }]
 					}
 				},
-				
+
 			});
 
 			{% if not user %}

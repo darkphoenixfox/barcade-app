@@ -905,7 +905,7 @@ def save_new_category(
         icon_filename = icon_upload.filename
 
     new_cat = crud.create_category(db, name=name, icon=icon_filename)
-    trigger = {"settings_saved": {"message": f"Category '{new_cat.name}' created."}}
+    trigger = {"category_saved": {"message": f"Category '{new_cat.name}' created."}}
     return Response(headers={"HX-Trigger": json.dumps(trigger)})
 
 @app.get("/settings/category/{category_id}/edit", response_class=HTMLResponse)
@@ -950,7 +950,7 @@ def save_category_changes(
     db.commit()
     db.refresh(category)
 
-    trigger = {"settings_saved": {"message": f"Category '{category.name}' updated."}}
+    trigger = {"category_saved": {"message": f"Category '{category.name}' updated."}}
     return Response(headers={"HX-Trigger": json.dumps(trigger)})
 
 @app.delete("/settings/category/{category_id}/delete", response_class=HTMLResponse)
